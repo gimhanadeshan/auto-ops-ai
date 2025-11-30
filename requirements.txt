@@ -19,17 +19,17 @@ langchain-google-genai==2.0.0
 
 # SDKs
 openai==1.47.0
-google-generativeai==0.8.1
+# google-generativeai is removed here; langchain-google-genai will install the correct version (0.7.x) automatically.
 tiktoken==0.7.0
 
 # --- Vector Database ---
 # Chromadb is notoriously sensitive to Python versions. 
-# It works perfectly on Python 3.11.
+# Works perfectly on Python 3.11.
 chromadb==0.5.11
 
 # --- Utilities ---
 python-dotenv==1.0.1
-# Switched you to PyJWT as python-jose is unmaintained/conflicting
+# Switched to PyJWT as python-jose is unmaintained/conflicting
 pyjwt==2.9.0 
 passlib[bcrypt]==1.7.4
 httpx==0.27.2
