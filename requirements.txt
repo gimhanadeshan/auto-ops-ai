@@ -1,29 +1,33 @@
 # FastAPI & Web Framework
-fastapi==0.109.0
-uvicorn[standard]==0.27.0
-python-multipart==0.0.6
+fastapi>=0.110.0             # Updated for full Pydantic v2 support
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.9      # CRITICAL: 0.0.6 has a ReDoS vulnerability (CVE-2024-24762)
 pydantic>=2.7.0
 pydantic-settings>=2.2.0
 
 # Database
-sqlalchemy==2.0.25
-alembic==1.13.1
+sqlalchemy>=2.0.25
+alembic>=1.13.1
 
-# AI & LangChain
-langchain==0.1.16
-langchain-openai==0.1.1
-langchain-google-genai==1.0.10
-openai==1.10.0
-google-generativeai>=0.7.0,<0.8.0
-# chromadb==0.4.22  # Requires numpy which doesn't support Python 3.14 yet
-tiktoken==0.5.2
+# AI & LangChain (Aligned for compatibility)
+# Using ranges allows pip to resolve the complex dependency tree between these
+langchain>=0.2.0             
+langchain-openai>=0.1.0
+langchain-google-genai>=1.0.0
+openai>=1.10.0
+google-generativeai>=0.7.0
+tiktoken>=0.7.0
+
+# Vector Database
+chromadb>=0.5.0              # Works fine on Python 3.11 (CI environment)
 
 # Utilities
-python-dotenv==1.0.0
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
-httpx==0.26.0
+python-dotenv>=1.0.0
+# Note: python-jose is unmaintained. Consider switching to PyJWT.
+python-jose[cryptography]>=3.3.0 
+passlib[bcrypt]>=1.7.4
+httpx>=0.26.0
 
 # Testing
-pytest==7.4.4
-pytest-asyncio==0.23.3
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
