@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bot, Mail, Lock, LogIn, AlertTriangle } from 'lucide-react'
-import './Auth.css'
+import '../styles/components/Auth.css'
 
 function Login({ onLogin }) {
   const [email, setEmail] = useState('')

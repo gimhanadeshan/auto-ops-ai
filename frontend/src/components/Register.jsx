@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bot, Mail, Lock, User, Shield, CheckCircle, AlertTriangle, UserPlus } from 'lucide-react'
-import './Auth.css'
+import '../styles/components/Auth.css'
 
 function Register() {
   const [formData, setFormData] = useState({

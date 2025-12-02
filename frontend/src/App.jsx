@@ -1,13 +1,20 @@
 import { useState, useEffect, useRef } from 'react'
-import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom'
-import { Bot, User, Power, Send, FileText, ExternalLink, LogOut, AlertCircle, Zap, Wrench, HelpCircle } from 'lucide-react'
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import { Bot, User, Send, FileText, AlertCircle, Zap, Wrench, HelpCircle } from 'lucide-react'
 import { fetchBackendStatus, sendChatMessage } from './api'
+import Sidebar from './components/Sidebar'
+import Dashboard from './components/Dashboard'
 import TicketList from './components/TicketList'
+import SystemMonitoring from './components/SystemMonitoring'
+import Reports from './components/Reports'
+import Settings from './components/Settings'
+import AutomationPage from './components/AutomationPage'
+import KnowledgeBasePage from './components/KnowledgeBasePage'
 import Login from './components/Login'
 import Register from './components/Register'
-import './App.css'
+import './styles/App.css'
 
-function ChatPage({ user, onLogout }) {
+function ChatPage({ user }) {
   const [backendStatus, setBackendStatus] = useState(null)
   const [messages, setMessages] = useState([
     { 
@@ -30,7 +37,6 @@ function ChatPage({ user, onLogout }) {
   }, [messages])
 
   useEffect(() => {
-    // Check backend status
     fetchBackendStatus()
       .then(data => setBackendStatus(data))
       .catch(err => console.error('Backend status check failed:', err))
@@ -64,7 +70,6 @@ function ChatPage({ user, onLogout }) {
 
       setMessages(prev => [...prev, assistantMessage])
       
-      // Update ticket ID if created
       if (response.ticket_id && !currentTicket) {
         setCurrentTicket(response.ticket_id)
       }
@@ -97,125 +102,120 @@ function ChatPage({ user, onLogout }) {
   }
 
   return (
-    <div className="app-container">
-      <header className="app-header">
-        <div className="header-left">
-          <div className="app-icon">
-            <Bot size={36} strokeWidth={2} />
-          </div>
-          <div className="header-text">
-            <h1>Auto-Ops-AI</h1>
-            <p className="tagline">AI-powered IT Support Assistant</p>
-          </div>
-        </div>
-        <div className="header-status">
-          <span className="user-badge">
-            <User size={16} />
-            <span>{user.name} ({user.tier})</span>
-          </span>
-          <span className={`status-indicator ${backendStatus ? 'online' : 'offline'}`}>
-            <span className="status-dot"></span>
-            {backendStatus ? 'Online' : 'Offline'}
-          </span>
-          <button onClick={onLogout} className="logout-btn">
-            <LogOut size={16} />
-            <span>Logout</span>
-          </button>
-        </div>
-      </header>
-
-      <div className="chat-container">
-        <div className="chat-messages">
-          {messages.map((msg, idx) => (
-            <div key={idx} className={`message-wrapper ${msg.role}`}>
-              <div className="message-bubble">
-                <div className="message-header">
-                  <span className="message-sender">
-                    {msg.role === 'user' ? (
-                      <><User size={14} /> You</>
-                    ) : (
-                      <><Bot size={14} /> AI Assistant</>
-                    )}
-                  </span>
-                  <span className="message-time">
-                    {formatTimestamp(msg.timestamp)}
-                  </span>
-                </div>
-                <div className="message-text">
-                  {msg.content}
-                </div>
-                {msg.ticketId && (
-                  <div className="message-badges">
-                    <span className="badge ticket-badge">
-                      <FileText size={12} /> Ticket #{msg.ticketId}
-                    </span>
-                    {msg.action && (
-                      <span className={`badge action-badge ${msg.action}`}>
-                        {msg.action === 'escalated' ? <><AlertCircle size={12} /> Escalated</> :
-                         msg.action === 'troubleshooting' ? <><Wrench size={12} /> Troubleshooting</> :
-                         msg.action === 'clarifying' ? <><HelpCircle size={12} /> Clarifying</> : msg.action}
-                      </span>
-                    )}
-                    {msg.priorityInfo && (
-                      <span className={`badge priority-badge ${msg.priorityInfo.priority_label?.toLowerCase()}`}>
-                        <Zap size={12} /> {msg.priorityInfo.priority_label}
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-          {loading && (
-            <div className="message-wrapper assistant">
-              <div className="message-bubble">
-                <div className="typing-indicator">
-                  <span></span>
-                  <span></span>
-                  <span></span>
-                </div>
-              </div>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-
-        <div className="chat-input-area">
-          <div className="input-section">
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Describe your IT issue... (e.g., 'My laptop is slow')"
-              className="message-input"
-              rows={2}
-              disabled={loading}
-            />
-            <button 
-              onClick={handleSend} 
-              disabled={loading || !input.trim()}
-              className="send-btn"
-            >
-              <Send size={18} />
-              <span>Send</span>
-            </button>
-          </div>
-          <div className="input-hint">
-            Press Enter to send, Shift+Enter for new line
+    <div className="chat-page">
+      <div className="chat-header">
+        <div className="chat-header-left">
+          <Bot size={28} />
+          <div>
+            <h2>AI Support Chat</h2>
+            <span className={`status-indicator ${backendStatus ? 'online' : 'offline'}`}>
+              <span className="status-dot"></span>
+              {backendStatus ? 'Online' : 'Offline'}
+            </span>
           </div>
         </div>
       </div>
 
-      <footer className="app-footer">
-        <a href="http://127.0.0.1:8000/docs" target="_blank" rel="noopener noreferrer" className="footer-link">
-          <ExternalLink size={16} />
-          <span>API Docs</span>
-        </a>
-        <Link to="/tickets" className="footer-link">
-          <FileText size={16} />
-          <span>View Tickets</span>
-        </Link>
-      </footer>
+      <div className="chat-messages">
+        {messages.map((msg, idx) => (
+          <div key={idx} className={`message-wrapper ${msg.role}`}>
+            <div className="message-bubble">
+              <div className="message-header">
+                <span className="message-sender">
+                  {msg.role === 'user' ? (
+                    <><User size={14} /> You</>
+                  ) : (
+                    <><Bot size={14} /> AI Assistant</>
+                  )}
+                </span>
+                <span className="message-time">
+                  {formatTimestamp(msg.timestamp)}
+                </span>
+              </div>
+              <div className="message-text">
+                {msg.content}
+              </div>
+              {msg.ticketId && (
+                <div className="message-badges">
+                  <span className="badge ticket-badge">
+                    <FileText size={12} /> Ticket #{msg.ticketId}
+                  </span>
+                  {msg.action && (
+                    <span className={`badge action-badge ${msg.action}`}>
+                      {msg.action === 'escalated' ? <><AlertCircle size={12} /> Escalated</> :
+                       msg.action === 'troubleshooting' ? <><Wrench size={12} /> Troubleshooting</> :
+                       msg.action === 'clarifying' ? <><HelpCircle size={12} /> Clarifying</> : msg.action}
+                    </span>
+                  )}
+                  {msg.priorityInfo && (
+                    <span className={`badge priority-badge ${msg.priorityInfo.priority_label?.toLowerCase()}`}>
+                      <Zap size={12} /> {msg.priorityInfo.priority_label}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+        {loading && (
+          <div className="message-wrapper assistant">
+            <div className="message-bubble">
+              <div className="typing-indicator">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+            </div>
+          </div>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      <div className="chat-input-area">
+        <div className="input-section">
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyPress={handleKeyPress}
+            placeholder="Describe your IT issue... (e.g., 'My laptop is slow')"
+            className="message-input"
+            rows={2}
+            disabled={loading}
+          />
+          <button 
+            onClick={handleSend} 
+            disabled={loading || !input.trim()}
+            className="send-btn"
+          >
+            <Send size={18} />
+            <span>Send</span>
+          </button>
+        </div>
+        <div className="input-hint">
+          Press Enter to send, Shift+Enter for new line
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function MainLayout({ user, onLogout }) {
+  return (
+    <div className="main-layout">
+      <Sidebar user={user} onLogout={onLogout} />
+      <div className="main-content">
+        <Routes>
+          <Route path="/dashboard" element={<Dashboard user={user} />} />
+          <Route path="/chat" element={<ChatPage user={user} />} />
+          <Route path="/tickets" element={<TicketList />} />
+          <Route path="/monitoring" element={<SystemMonitoring />} />
+          <Route path="/reports" element={<Reports />} />
+          <Route path="/automation" element={<AutomationPage />} />
+          <Route path="/knowledge-base" element={<KnowledgeBasePage />} />
+          <Route path="/settings" element={<Settings user={user} />} />
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+      </div>
     </div>
   )
 }
@@ -224,7 +224,6 @@ function App() {
   const [user, setUser] = useState(null)
 
   useEffect(() => {
-    // Check if user is logged in
     const storedUser = localStorage.getItem('user')
     if (storedUser) {
       setUser(JSON.parse(storedUser))
@@ -243,12 +242,15 @@ function App() {
 
   return (
     <Router>
-      <Routes>
-        <Route path="/login" element={user ? <Navigate to="/" /> : <Login onLogin={handleLogin} />} />
-        <Route path="/register" element={user ? <Navigate to="/" /> : <Register />} />
-        <Route path="/" element={user ? <ChatPage user={user} onLogout={handleLogout} /> : <Navigate to="/login" />} />
-        <Route path="/tickets" element={user ? <TicketList /> : <Navigate to="/login" />} />
-      </Routes>
+      {!user ? (
+        <Routes>
+          <Route path="/login" element={<Login onLogin={handleLogin} />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      ) : (
+        <MainLayout user={user} onLogout={handleLogout} />
+      )}
     </Router>
   )
 }

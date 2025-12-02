@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, RefreshCw, AlertCircle, Zap, CheckCircle, Clock, XCircle, Loader } from 'lucide-react'
-import './TicketList.css'
+import '../styles/components/TicketList.css'
 
 function TicketList() {
   const [tickets, setTickets] = useState([])
@@ -110,10 +110,6 @@ function TicketList() {
     <div className="ticket-list-container">
       <div className="ticket-header">
         <div className="header-left">
-          <Link to="/" className="back-btn">
-            <ArrowLeft size={18} />
-            <span>Back to Chat</span>
-          </Link>
           <h1>Support Tickets</h1>
         </div>
         <button onClick={fetchTickets} className="refresh-btn">

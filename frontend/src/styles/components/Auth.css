@@ -3,7 +3,7 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  background: #0a0a0f;
+  background: var(--color-bg-primary);
   padding: 2rem;
   position: relative;
   overflow: hidden;
@@ -54,8 +54,8 @@
   position: absolute;
   width: 4px;
   height: 4px;
-  background: #14b8a6;
-  box-shadow: 0 0 10px #14b8a6, 0 0 20px #14b8a6;
+  background: var(--color-primary);
+  box-shadow: 0 0 10px var(--color-primary), 0 0 20px #14b8a6;
   animation: float 8s infinite ease-in-out;
 }
 
@@ -167,12 +167,12 @@
 }
 
 .auth-card {
-  background: rgba(26, 26, 46, 0.95);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+  background: var(--color-bg-secondary);
+  box-shadow: var(--shadow-xl);
   width: 100%;
   max-width: 450px;
   overflow: hidden;
-  border: 1px solid rgba(20, 184, 166, 0.3);
+  border: 1px solid var(--color-border-primary);
   position: relative;
   z-index: 1;
   backdrop-filter: blur(20px);
@@ -246,7 +246,7 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: #d1d5db;
+  color: var(--color-text-secondary);
   margin-bottom: 0.5rem;
   font-weight: 600;
   font-size: 0.9rem;
@@ -256,9 +256,9 @@
 .tier-select {
   width: 100%;
   padding: 0.875rem;
-  background: rgba(15, 15, 26, 0.8);
-  border: 1px solid rgba(42, 42, 62, 0.8);
-  color: #e5e7eb;
+  background: var(--color-bg-hover);
+  border: 1px solid var(--color-border-primary);
+  color: var(--color-text-primary);
   font-size: 1rem;
   transition: all 0.3s;
   font-family: 'Courier New', monospace;
@@ -267,18 +267,18 @@
 .form-group input:focus,
 .tier-select:focus {
   outline: none;
-  border-color: #14b8a6;
-  background: #1a1a2e;
+  border-color: var(--color-primary);
+  background: var(--color-bg-secondary);
 }
 
 .form-group input::placeholder {
-  color: #6b7280;
+  color: var(--color-text-tertiary);
 }
 
 .form-group small {
   display: block;
   margin-top: 0.5rem;
-  color: #9ca3af;
+  color: var(--color-text-secondary);
   font-size: 0.8rem;
 }
 
@@ -287,14 +287,15 @@
 }
 
 .tier-select option {
-  background: #0f0f1a;
-  color: #e5e7eb;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  padding: 0.5rem;
 }
 
 .auth-btn {
   width: 100%;
   padding: 1rem;
-  background: #14b8a6;
+  background: var(--color-primary);
   color: white;
   border: none;
   font-size: 1rem;
@@ -421,3 +422,4 @@
     font-size: 1.25rem;
   }
 }
+
