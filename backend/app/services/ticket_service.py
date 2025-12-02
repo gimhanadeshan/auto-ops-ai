@@ -27,18 +27,13 @@ class TicketService:
             description=ticket_data.description,
             user_email=ticket_data.user_email,
             status=TicketStatus.OPEN,
-            priority=TicketPriority.MEDIUM
+            priority=ticket_data.priority or TicketPriority.MEDIUM,
+            category=ticket_data.category or TicketCategory.OTHER
         )
         
         # Simple ticket creation - AI analysis happens in chat endpoint
         # The multi-agent system in /chat provides better analysis
         try:
-            # Set basic defaults
-            if hasattr(ticket_data, 'priority') and ticket_data.priority:
-                db_ticket.priority = ticket_data.priority
-            else:
-                db_ticket.priority = TicketPriority.MEDIUM
-                
             db_ticket.ai_analysis = "Ticket created. Use /chat endpoint for AI-powered troubleshooting."
             
         except Exception as e:
