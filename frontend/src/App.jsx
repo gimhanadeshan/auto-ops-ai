@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { Bot, User, Send, FileText, AlertCircle, Zap, Wrench, HelpCircle } from 'lucide-react'
 import { fetchBackendStatus, sendChatMessage } from './api'
+import { STORAGE_KEYS } from './config/constants'
 import Sidebar from './components/Sidebar'
 import Dashboard from './components/Dashboard'
 import TicketList from './components/TicketList'
@@ -222,12 +223,20 @@ function MainLayout({ user, onLogout }) {
 
 function App() {
   const [user, setUser] = useState(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('user')
+    const storedUser = localStorage.getItem(STORAGE_KEYS.USER_DATA)
     if (storedUser) {
-      setUser(JSON.parse(storedUser))
+      try {
+        setUser(JSON.parse(storedUser))
+      } catch (error) {
+        console.error('Failed to parse stored user data:', error)
+        localStorage.removeItem(STORAGE_KEYS.USER_DATA)
+        localStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN)
+      }
     }
+    setLoading(false)
   }, [])
 
   const handleLogin = (userData) => {
@@ -235,9 +244,26 @@ function App() {
   }
 
   const handleLogout = () => {
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
+    localStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN)
+    localStorage.removeItem(STORAGE_KEYS.USER_DATA)
     setUser(null)
+  }
+
+  if (loading) {
+    return (
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '100vh',
+        background: 'var(--color-bg-primary)',
+        color: 'var(--color-text-primary)'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '24px', marginBottom: '16px' }}>Loading...</div>
+        </div>
+      </div>
+    )
   }
 
   return (
