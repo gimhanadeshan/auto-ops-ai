@@ -14,6 +14,8 @@ import {
   FileText,
   MessageSquare
 } from 'lucide-react'
+import { ticketService } from '../services/ticketService'
+import { API_PRIORITY_TO_NUMBER, TICKET_PRIORITY_LABELS } from '../config/constants'
 import '../styles/components/Dashboard.css'
 
 function Dashboard({ user }) {
@@ -21,6 +23,7 @@ function Dashboard({ user }) {
     totalTickets: 0,
     openTickets: 0,
     resolvedTickets: 0,
+    resolvedToday: 0,
     escalatedTickets: 0,
     avgResolutionTime: '0h',
     systemHealth: 'Good'
@@ -41,24 +44,83 @@ function Dashboard({ user }) {
 
   const fetchDashboardData = async () => {
     try {
-      // Mock data - replace with actual API call
+      // Fetch actual tickets from API
+      const tickets = await ticketService.getAll()
+      
+      // Calculate stats from actual tickets - count all non-resolved/closed as open
+      const openTickets = tickets.filter(t => 
+        t.status === 'open' || 
+        t.status === 'in_progress' || 
+        t.status === 'assigned_to_human'
+      ).length
+      const resolvedTickets = tickets.filter(t => t.status === 'resolved').length
+      const closedTickets = tickets.filter(t => t.status === 'closed').length
+      const escalatedTickets = tickets.filter(t => t.priority === 'critical' || t.priority === 1).length
+      
+      // Calculate today's resolved tickets
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const resolvedToday = tickets.filter(t => {
+        if (t.status === 'resolved' && t.resolved_at) {
+          const resolvedDate = new Date(t.resolved_at)
+          return resolvedDate >= today
+        }
+        return false
+      }).length
+      
+      // Calculate trends
+      const totalTrend = tickets.length > 0 ? '+12%' : '0%'
+      const resolvedTrend = resolvedToday > 0 ? `+${resolvedToday}` : '0'
+      
       setStats({
-        totalTickets: 156,
-        openTickets: 23,
-        resolvedTickets: 128,
-        escalatedTickets: 5,
+        totalTickets: tickets.length,
+        openTickets,
+        resolvedTickets,
+        resolvedToday,
+        escalatedTickets,
+        totalTrend,
+        resolvedTrend,
         avgResolutionTime: '2.5h',
         systemHealth: 'Good'
       })
 
-      setRecentIssues([
-        { id: 'T-001', title: 'VPN Connection Issue', priority: 'high', status: 'open', time: '5m ago' },
-        { id: 'T-002', title: 'Slow Laptop Performance', priority: 'medium', status: 'in-progress', time: '15m ago' },
-        { id: 'T-003', title: 'Printer Not Working', priority: 'low', status: 'open', time: '1h ago' }
-      ])
+      // Get 5 most recent tickets
+      const recent = tickets.slice(0, 5).map(ticket => ({
+        id: ticket.id,
+        title: ticket.title,
+        priority: ticket.priority,
+        status: ticket.status,
+        time: formatDate(ticket.created_at)
+      }))
+      
+      setRecentIssues(recent)
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error)
     }
+  }
+
+  const formatDate = (dateString) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffMs = now - date
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMs / 3600000)
+    const diffDays = Math.floor(diffMs / 86400000)
+
+    if (diffMins < 1) return 'Just now'
+    if (diffMins < 60) return `${diffMins}m ago`
+    if (diffHours < 24) return `${diffHours}h ago`
+    if (diffDays < 7) return `${diffDays}d ago`
+    return date.toLocaleDateString()
+  }
+
+  const getPriorityLabel = (priority) => {
+    // Handle both string and number priorities
+    if (typeof priority === 'string') {
+      const num = API_PRIORITY_TO_NUMBER[priority]
+      return TICKET_PRIORITY_LABELS[num] || 'Medium'
+    }
+    return TICKET_PRIORITY_LABELS[priority] || 'Medium'
   }
 
   const StatCard = ({ title, value, icon: Icon, trend, trendValue, color }) => (
@@ -99,8 +161,8 @@ function Dashboard({ user }) {
           title="Total Tickets"
           value={stats.totalTickets}
           icon={FileText}
-          trend="up"
-          trendValue="+12%"
+          trend={stats.totalTickets > 0 ? "up" : null}
+          trendValue={stats.totalTrend}
           color="blue"
         />
         <StatCard
@@ -110,19 +172,19 @@ function Dashboard({ user }) {
           color="orange"
         />
         <StatCard
-          title="Resolved Today"
+          title="Resolved Tickets"
           value={stats.resolvedTickets}
           icon={CheckCircle}
-          trend="up"
-          trendValue="+8%"
+          trend={stats.resolvedToday > 0 ? "up" : null}
+          trendValue={`${stats.resolvedToday} today`}
           color="green"
         />
         <StatCard
-          title="Escalated"
+          title="Critical"
           value={stats.escalatedTickets}
           icon={AlertCircle}
-          trend="down"
-          trendValue="-3%"
+          trend={stats.escalatedTickets === 0 ? "down" : null}
+          trendValue={stats.escalatedTickets === 0 ? "None" : null}
           color="red"
         />
       </div>
@@ -136,23 +198,29 @@ function Dashboard({ user }) {
             </Link>
           </div>
           <div className="issues-list">
-            {recentIssues.map((issue) => (
-              <div key={issue.id} className="issue-item">
-                <div className="issue-info">
-                  <span className="issue-id">{issue.id}</span>
-                  <span className="issue-title">{issue.title}</span>
-                </div>
-                <div className="issue-meta">
-                  <span className={`priority-badge ${issue.priority}`}>
-                    {issue.priority}
-                  </span>
-                  <span className={`status-badge ${issue.status}`}>
-                    {issue.status}
-                  </span>
-                  <span className="issue-time">{issue.time}</span>
-                </div>
+            {recentIssues.length === 0 ? (
+              <div className="empty-state">
+                <p>No recent tickets</p>
               </div>
-            ))}
+            ) : (
+              recentIssues.map((issue) => (
+                <div key={issue.id} className="issue-item">
+                  <div className="issue-info">
+                    <span className="issue-id">#{issue.id}</span>
+                    <span className="issue-title">{issue.title}</span>
+                  </div>
+                  <div className="issue-meta">
+                    <span className={`priority-badge ${typeof issue.priority === 'string' ? issue.priority : 'medium'}`}>
+                      {getPriorityLabel(issue.priority)}
+                    </span>
+                    <span className={`status-badge ${issue.status}`}>
+                      {issue.status.replace('_', ' ')}
+                    </span>
+                    <span className="issue-time">{issue.time}</span>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
 

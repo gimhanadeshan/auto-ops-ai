@@ -50,6 +50,12 @@ class HttpClient {
         throw await this.handleErrorResponse(response)
       }
 
+      // Handle empty responses (like 204 No Content for DELETE)
+      const contentType = response.headers.get('content-type')
+      if (response.status === 204 || !contentType || !contentType.includes('application/json')) {
+        return null
+      }
+
       return await response.json()
     } catch (error) {
       throw this.handleError(error)

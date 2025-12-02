@@ -9,10 +9,10 @@ export const API_CONFIG = {
 export const API_ENDPOINTS = {
   // Auth endpoints
   AUTH: {
-    LOGIN: '/api/auth/login',
-    REGISTER: '/api/auth/register',
-    LOGOUT: '/api/auth/logout',
-    REFRESH: '/api/auth/refresh'
+    LOGIN: '/api/v1/login',
+    REGISTER: '/api/v1/register',
+    LOGOUT: '/api/v1/logout',
+    REFRESH: '/api/v1/refresh'
   },
   
   // Chat endpoints
@@ -23,11 +23,11 @@ export const API_ENDPOINTS = {
   
   // Ticket endpoints
   TICKETS: {
-    GET_ALL: '/api/tickets',
-    GET_BY_ID: (id) => `/api/tickets/${id}`,
-    CREATE: '/api/tickets',
-    UPDATE: (id) => `/api/tickets/${id}`,
-    DELETE: (id) => `/api/tickets/${id}`
+    GET_ALL: '/api/v1/tickets',
+    GET_BY_ID: (id) => `/api/v1/tickets/${id}`,
+    CREATE: '/api/v1/tickets',
+    UPDATE: (id) => `/api/v1/tickets/${id}`,
+    DELETE: (id) => `/api/v1/tickets/${id}`
   },
   
   // Dashboard endpoints
@@ -138,18 +138,67 @@ export const APP_SETTINGS = {
 // Ticket Status
 export const TICKET_STATUS = {
   OPEN: 'open',
-  IN_PROGRESS: 'in-progress',
+  IN_PROGRESS: 'in_progress',
+  ASSIGNED_TO_HUMAN: 'assigned_to_human',
   RESOLVED: 'resolved',
-  CLOSED: 'closed',
-  ESCALATED: 'escalated'
+  CLOSED: 'closed'
+}
+
+// Ticket Status Labels
+export const TICKET_STATUS_LABELS = {
+  open: 'Open',
+  in_progress: 'In Progress',
+  assigned_to_human: 'Assigned to Human',
+  resolved: 'Resolved',
+  closed: 'Closed'
 }
 
 // Ticket Priority
 export const TICKET_PRIORITY = {
-  LOW: 'low',
-  MEDIUM: 'medium',
-  HIGH: 'high',
-  CRITICAL: 'critical'
+  LOW: 4,
+  MEDIUM: 3,
+  HIGH: 2,
+  CRITICAL: 1
+}
+
+// Ticket Priority to API mapping
+export const TICKET_PRIORITY_TO_API = {
+  1: 'critical',
+  2: 'high',
+  3: 'medium',
+  4: 'low'
+}
+
+// API Priority to number mapping
+export const API_PRIORITY_TO_NUMBER = {
+  'critical': 1,
+  'high': 2,
+  'medium': 3,
+  'low': 4
+}
+
+// Ticket Priority Labels
+export const TICKET_PRIORITY_LABELS = {
+  1: 'Critical',
+  2: 'High',
+  3: 'Medium',
+  4: 'Low'
+}
+
+// Ticket Category
+export const TICKET_CATEGORY = {
+  USER_ERROR: 'user_error',
+  SYSTEM_ISSUE: 'system_issue',
+  FEATURE_REQUEST: 'feature_request',
+  OTHER: 'other'
+}
+
+// Ticket Category Labels
+export const TICKET_CATEGORY_LABELS = {
+  user_error: 'User Error',
+  system_issue: 'System Issue',
+  feature_request: 'Feature Request',
+  other: 'Other'
 }
 
 // User Roles

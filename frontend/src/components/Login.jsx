@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bot, Mail, Lock, LogIn, AlertTriangle } from 'lucide-react'
+import { authService } from '../services/authService'
 import '../styles/components/Auth.css'
 
 function Login({ onLogin }) {
@@ -16,18 +17,7 @@ function Login({ onLogin }) {
     setError(null)
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/v1/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      })
-
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.detail || 'Login failed')
-      }
-
-      const data = await response.json()
+      const data = await authService.login({ email, password })
       
       // Store token and user info
       localStorage.setItem('token', data.access_token)

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bot, Mail, Lock, User, Shield, CheckCircle, AlertTriangle, UserPlus } from 'lucide-react'
+import { authService } from '../services/authService'
 import '../styles/components/Auth.css'
 
 function Register() {
@@ -42,21 +43,12 @@ function Register() {
     }
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/v1/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: formData.email,
-          name: formData.name,
-          password: formData.password,
-          tier: formData.tier
-        })
+      await authService.register({
+        email: formData.email,
+        name: formData.name,
+        password: formData.password,
+        tier: formData.tier
       })
-
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.detail || 'Registration failed')
-      }
 
       setSuccess(true)
       setTimeout(() => {
