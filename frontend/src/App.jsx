@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom'
+import { Bot, User, Power, Send, FileText, ExternalLink, LogOut, AlertCircle, Zap, Wrench, HelpCircle } from 'lucide-react'
 import { fetchBackendStatus, sendChatMessage } from './api'
 import TicketList from './components/TicketList'
 import Login from './components/Login'
@@ -11,7 +12,7 @@ function ChatPage({ user, onLogout }) {
   const [messages, setMessages] = useState([
     { 
       role: 'assistant', 
-      content: `👋 Hi ${user?.name || 'there'}! I'm your AI IT Support Assistant. How can I help you today?`,
+      content: `Hi ${user?.name || 'there'}! I'm your AI IT Support Assistant. How can I help you today?`,
       timestamp: new Date().toISOString()
     }
   ])
@@ -71,7 +72,7 @@ function ChatPage({ user, onLogout }) {
     } catch (error) {
       const errorMessage = {
         role: 'assistant',
-        content: `❌ Error: ${error.message}. Please check if the backend is running.`,
+        content: `Error: ${error.message}. Please check if the backend is running.`,
         timestamp: new Date().toISOString(),
         isError: true
       }
@@ -99,7 +100,9 @@ function ChatPage({ user, onLogout }) {
     <div className="app-container">
       <header className="app-header">
         <div className="header-left">
-          <div className="app-icon">🤖</div>
+          <div className="app-icon">
+            <Bot size={36} strokeWidth={2} />
+          </div>
           <div className="header-text">
             <h1>Auto-Ops-AI</h1>
             <p className="tagline">AI-powered IT Support Assistant</p>
@@ -107,14 +110,16 @@ function ChatPage({ user, onLogout }) {
         </div>
         <div className="header-status">
           <span className="user-badge">
-            👤 {user.name} ({user.tier})
+            <User size={16} />
+            <span>{user.name} ({user.tier})</span>
           </span>
           <span className={`status-indicator ${backendStatus ? 'online' : 'offline'}`}>
             <span className="status-dot"></span>
             {backendStatus ? 'Online' : 'Offline'}
           </span>
           <button onClick={onLogout} className="logout-btn">
-            🚪 Logout
+            <LogOut size={16} />
+            <span>Logout</span>
           </button>
         </div>
       </header>
@@ -126,7 +131,11 @@ function ChatPage({ user, onLogout }) {
               <div className="message-bubble">
                 <div className="message-header">
                   <span className="message-sender">
-                    {msg.role === 'user' ? '👤 You' : '🤖 AI Assistant'}
+                    {msg.role === 'user' ? (
+                      <><User size={14} /> You</>
+                    ) : (
+                      <><Bot size={14} /> AI Assistant</>
+                    )}
                   </span>
                   <span className="message-time">
                     {formatTimestamp(msg.timestamp)}
@@ -138,18 +147,18 @@ function ChatPage({ user, onLogout }) {
                 {msg.ticketId && (
                   <div className="message-badges">
                     <span className="badge ticket-badge">
-                      📋 Ticket #{msg.ticketId}
+                      <FileText size={12} /> Ticket #{msg.ticketId}
                     </span>
                     {msg.action && (
                       <span className={`badge action-badge ${msg.action}`}>
-                        {msg.action === 'escalated' ? '⚠️ Escalated' :
-                         msg.action === 'troubleshooting' ? '🔧 Troubleshooting' :
-                         msg.action === 'clarifying' ? '❓ Clarifying' : msg.action}
+                        {msg.action === 'escalated' ? <><AlertCircle size={12} /> Escalated</> :
+                         msg.action === 'troubleshooting' ? <><Wrench size={12} /> Troubleshooting</> :
+                         msg.action === 'clarifying' ? <><HelpCircle size={12} /> Clarifying</> : msg.action}
                       </span>
                     )}
                     {msg.priorityInfo && (
                       <span className={`badge priority-badge ${msg.priorityInfo.priority_label?.toLowerCase()}`}>
-                        ⚡ {msg.priorityInfo.priority_label}
+                        <Zap size={12} /> {msg.priorityInfo.priority_label}
                       </span>
                     )}
                   </div>
@@ -187,7 +196,8 @@ function ChatPage({ user, onLogout }) {
               disabled={loading || !input.trim()}
               className="send-btn"
             >
-              📤 Send
+              <Send size={18} />
+              <span>Send</span>
             </button>
           </div>
           <div className="input-hint">
@@ -198,10 +208,12 @@ function ChatPage({ user, onLogout }) {
 
       <footer className="app-footer">
         <a href="http://127.0.0.1:8000/docs" target="_blank" rel="noopener noreferrer" className="footer-link">
-          📚 API Docs
+          <ExternalLink size={16} />
+          <span>API Docs</span>
         </a>
         <Link to="/tickets" className="footer-link">
-          🎫 View Tickets
+          <FileText size={16} />
+          <span>View Tickets</span>
         </Link>
       </footer>
     </div>
