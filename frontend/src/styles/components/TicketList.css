@@ -482,6 +482,13 @@
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: var(--shadow-xl);
+  /* Hide scrollbar for Chrome, Safari and Opera */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+.modal-content::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
 }
 
 .modal-header {
