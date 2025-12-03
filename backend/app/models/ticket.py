@@ -13,6 +13,7 @@ class TicketStatus(str, Enum):
     """Ticket status enumeration."""
     OPEN = "open"
     IN_PROGRESS = "in_progress"
+    ASSIGNED_TO_HUMAN = "assigned_to_human"
     RESOLVED = "resolved"
     CLOSED = "closed"
 
@@ -64,7 +65,8 @@ class TicketBase(BaseModel):
 
 class TicketCreate(TicketBase):
     """Schema for creating a ticket."""
-    pass
+    priority: Optional[TicketPriority] = TicketPriority.MEDIUM
+    category: Optional[TicketCategory] = TicketCategory.OTHER
 
 
 class TicketUpdate(BaseModel):
