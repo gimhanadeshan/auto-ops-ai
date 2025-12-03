@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import './Auth.css'
+import { Bot, Mail, Lock, LogIn, AlertTriangle } from 'lucide-react'
+import { authService } from '../services/authService'
+import '../styles/components/Auth.css'
 
 function Login({ onLogin }) {
   const [email, setEmail] = useState('')
@@ -15,18 +17,7 @@ function Login({ onLogin }) {
     setError(null)
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/v1/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      })
-
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.detail || 'Login failed')
-      }
-
-      const data = await response.json()
+      const data = await authService.login({ email, password })
       
       // Store token and user info
       localStorage.setItem('token', data.access_token)
@@ -44,9 +35,26 @@ function Login({ onLogin }) {
 
   return (
     <div className="auth-container">
+      <div className="tech-background">
+        <div className="grid-lines"></div>
+        <div className="floating-particles">
+          <div className="particle"></div>
+          <div className="particle"></div>
+          <div className="particle"></div>
+          <div className="particle"></div>
+          <div className="particle"></div>
+          <div className="particle"></div>
+          <div className="particle"></div>
+          <div className="particle"></div>
+        </div>
+        <div className="scan-line"></div>
+      </div>
       <div className="auth-card">
         <div className="auth-header">
-          <h1>🤖 Auto-Ops-AI</h1>
+          <div className="auth-icon">
+            <Bot size={48} strokeWidth={2} />
+          </div>
+          <h1>Auto-Ops-AI</h1>
           <p>AI-powered IT Support Assistant</p>
         </div>
 
@@ -55,13 +63,16 @@ function Login({ onLogin }) {
 
           {error && (
             <div className="error-alert">
-              <span>⚠️</span>
-              {error}
+              <AlertTriangle size={20} />
+              <span>{error}</span>
             </div>
           )}
 
           <div className="form-group">
-            <label>Email</label>
+            <label>
+              <Mail size={16} />
+              <span>Email</span>
+            </label>
             <input
               type="email"
               value={email}
@@ -73,7 +84,10 @@ function Login({ onLogin }) {
           </div>
 
           <div className="form-group">
-            <label>Password</label>
+            <label>
+              <Lock size={16} />
+              <span>Password</span>
+            </label>
             <input
               type="password"
               value={password}
@@ -85,7 +99,8 @@ function Login({ onLogin }) {
           </div>
 
           <button type="submit" className="auth-btn" disabled={loading}>
-            {loading ? 'Logging in...' : 'Login'}
+            <LogIn size={18} />
+            <span>{loading ? 'Logging in...' : 'Login'}</span>
           </button>
 
           <div className="auth-switch">

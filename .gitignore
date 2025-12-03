@@ -19,6 +19,8 @@ dist/
 node_modules/
 dist/
 /.vite
+package-lock.json
+frontend/package-lock.json
 
 # IDEs
 .vscode/
