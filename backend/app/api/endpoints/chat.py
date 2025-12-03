@@ -16,6 +16,9 @@ from app.services.agents.enhanced_conversation_agent import get_enhanced_convers
 from app.services.dataset_analyzer import get_analyzer
 from app.services.ticket_service import ticket_service
 from app.models.ticket import TicketCreate
+import os
+
+CHAT_LOG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'logs', 'chat.log')
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -79,6 +82,12 @@ async def chat(
         
         logger.info(f"Processing chat for user: {request.user_email}")
         logger.info(f"Message: {user_message[:100]}...")
+        try:
+            os.makedirs(os.path.dirname(CHAT_LOG_PATH), exist_ok=True)
+            with open(CHAT_LOG_PATH, 'a', encoding='utf-8') as f:
+                f.write(f"{datetime.utcnow().isoformat()} | IN | {request.user_email} | {user_message[:200].replace('\n',' ')}\n")
+        except Exception:
+            pass
         
         # STEP 1: Get or create conversation state
         conversation_state = enhanced_agent.get_or_create_conversation(request.user_email)
@@ -92,19 +101,56 @@ async def chat(
         agent_response = enhanced_agent.process_user_response(user_message, conversation_state)
         
         logger.info(f"Agent action: {agent_response['action']}, Phase: {agent_response.get('phase')}")
+        try:
+            with open(CHAT_LOG_PATH, 'a', encoding='utf-8') as f:
+                f.write(
+                    f"{datetime.utcnow().isoformat()} | OUT | {request.user_email} | "
+                    f"action={agent_response['action']} phase={agent_response.get('phase')} "
+                    f"llmFirst={settings.conversation_llm_first} category={conversation_state.context.category or 'unknown'} isTechnical={conversation_state.context.is_technical} | "
+                    f"{agent_response['message'][:200].replace('\n',' ')}\n"
+                )
+        except Exception:
+            pass
         
-        # STEP 4: Find similar issues from dataset if in troubleshooting phase
+        # STEP 4: RAG Integration - Check for similar issues if technical and has description
         similar_issues = None
-        if conversation_state.phase == "troubleshooting" or conversation_state.context.category:
-            category = conversation_state.context.category or "other"
-            similar_issues = analyzer.find_similar_issues(
-                conversation_state.context.issue_description or user_message,
-                category,
-                limit=3
-            )
-            
-            if similar_issues:
-                logger.info(f"Found {len(similar_issues)} similar issues (top similarity: {similar_issues[0].get('similarity_score', 0)})")
+        rag_used = False
+        
+        if (conversation_state.context.is_technical and 
+            conversation_state.context.issue_description and 
+            len(conversation_state.context.issue_description) > 10):
+            try:
+                logger.info(f"[RAG] Searching for similar issues: {conversation_state.context.issue_description[:50]}")
+                similar_issues = analyzer.find_similar_issues(
+                    issue_description=conversation_state.context.issue_description,
+                    category=conversation_state.context.category,
+                    top_k=3,
+                    threshold=0.75  # Higher threshold for quality matches
+                )
+                
+                if similar_issues:
+                    rag_used = True
+                    logger.info(f"[RAG] Found {len(similar_issues)} similar issues")
+                    
+                    # Add RAG suggestions to agent response if in troubleshooting phase
+                    if conversation_state.phase.value == "troubleshooting" and not agent_response.get("rag_added"):
+                        rag_solutions = "\\n\\n".join([
+                            f"📋 Similar issue resolved: {issue.get('description', 'N/A')[:100]}... → {issue.get('resolution', 'N/A')[:150]}"
+                            for issue in similar_issues[:2]  # Top 2 most similar
+                        ])
+                        
+                        # Prepend RAG suggestions to the agent message
+                        if rag_solutions:
+                            agent_response["message"] = (
+                                f"I found similar issues that were resolved:\\n{rag_solutions}\\n\\n"
+                                f"Does this help? If not, {agent_response['message']}"
+                            )
+                            agent_response["rag_added"] = True
+                else:
+                    logger.info("[RAG] No similar issues found above threshold, using LLM")
+            except Exception as e:
+                logger.error(f"[RAG] Error searching similar issues: {e}")
+                similar_issues = None
         
         # STEP 5: Handle different action types
         ticket_id = request.ticket_id

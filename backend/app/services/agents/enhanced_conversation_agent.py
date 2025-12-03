@@ -38,6 +38,60 @@ class EnhancedConversationAgent:
         
         logger.info("Enhanced Conversation Agent initialized")
     
+    def _compose_message(self, base_text: str, state: ConversationState) -> str:
+        """Generate LLM response directly from conversation context."""
+        try:
+            logger.info(f"[LLM] _compose_message called | llm_first={settings.conversation_llm_first}")
+            
+            if not settings.conversation_llm_first:
+                logger.info("[LLM] LLM-first disabled, returning base_text")
+                return base_text
+            
+            # Build context for LLM
+            context_parts = []
+            if state.context.issue_description:
+                context_parts.append(f"Issue: {state.context.issue_description}")
+            if state.context.has_upcoming_meeting and state.context.meeting_time_minutes:
+                context_parts.append(f"URGENT: User has meeting in {state.context.meeting_time_minutes} minutes")
+            if state.context.attempted_solutions:
+                context_parts.append(f"Already tried {len(state.context.attempted_solutions)} steps")
+            
+            context_str = "\n".join(context_parts) if context_parts else "New conversation"
+            
+            prompt = (
+                "You are a helpful IT support technician. Based on the context, provide a natural, friendly response.\n"
+                "Be concise and actionable. If suggesting a troubleshooting step, provide ONE clear step.\n\n"
+                f"Context:\n{context_str}\n\n"
+                f"Template guidance: {base_text}\n\n"
+                "Your response:"
+            )
+            
+            logger.info(f"[LLM] Calling LLM with model: {settings.gemini_model}")
+            response = self.model.generate_content(
+                prompt,
+                generation_config=genai.types.GenerationConfig(
+                    temperature=0.7,
+                    max_output_tokens=250
+                ),
+                safety_settings={
+                    'HARASSMENT': 'BLOCK_NONE',
+                    'HATE_SPEECH': 'BLOCK_NONE',
+                    'SEXUALLY_EXPLICIT': 'BLOCK_NONE',
+                    'DANGEROUS_CONTENT': 'BLOCK_NONE'
+                }
+            )
+            
+            # Check if response was blocked
+            if not response.candidates or not response.candidates[0].content.parts:
+                logger.warning(f"[LLM] Response blocked by safety filters: {response.prompt_feedback}")
+                return base_text
+                
+            logger.info(f"[LLM] Response received: {response.text[:100]}...")
+            return response.text or base_text
+        except Exception as e:
+            logger.error(f"[LLM] Error: {e}")
+            return base_text
+    
     def get_or_create_conversation(self, user_email: str) -> ConversationState:
         """Get existing conversation or create new one."""
         if user_email not in self.active_conversations:
@@ -182,13 +236,18 @@ class EnhancedConversationAgent:
         message_lower = message.lower()
         
         attempted_actions = {
-            "restart": ["restart", "reboot", "rebooted", "turned off and on"],
+            "restart": ["restart", "reboot", "rebooted", "restarted", "turned off and on"],
             "update": ["update", "updated", "upgrade"],
             "reinstall": ["reinstall", "reinstalled", "uninstall"],
             "clear_cache": ["clear cache", "cleared cache", "delete cache"],
             "check_cables": ["check cable", "checked cables", "plugged in"],
             "reset_password": ["reset password", "changed password"],
         }
+        
+        # Negation patterns to avoid false positives like "not restarted"
+        negation_before_action = re.compile(r"\b(not|never|didn't|haven't|no)\b[\s\w-]*\b(restart|restarted|reboot|updated|reinstalled|cleared|reset)\b")
+        if negation_before_action.search(message_lower):
+            return
         
         for action, keywords in attempted_actions.items():
             if any(kw in message_lower for kw in keywords):
@@ -470,6 +529,27 @@ class EnhancedConversationAgent:
         self.extract_temporal_context(user_message, state)
         self.extract_error_messages(user_message, state)
         self.extract_steps_taken(user_message, state)
+
+        # LLM classification: determine if this is a technical IT issue
+        if state.phase in [ConversationPhase.GREETING, ConversationPhase.ISSUE_GATHERING]:
+            try:
+                classification_prompt = (
+                    "Analyze this message. Is it describing a technical IT problem (computer, software, network, hardware issue)? "
+                    "Answer with ONLY 'YES' or 'NO'."
+                )
+                result = self.model.generate_content(
+                    [classification_prompt, f"User message: {user_message}"],
+                    generation_config=genai.types.GenerationConfig(temperature=0.0, max_output_tokens=3)
+                )
+                answer = (result.text or "").strip().upper()
+                if answer in ["YES", "NO"]:
+                    state.context.is_technical = (answer == "YES")
+                    state.context.message_type = "technical_issue" if answer == "YES" else "general_chat"
+            except Exception:
+                # Fallback: check for IT keywords
+                it_keywords = ["slow", "computer", "laptop", "wifi", "network", "error", "crash", "freeze", 
+                              "outlook", "teams", "app", "software", "login", "password", "printer"]
+                state.context.is_technical = any(kw in user_message.lower() for kw in it_keywords)
         
         # State machine logic
         if state.phase == ConversationPhase.GREETING:
@@ -487,6 +567,25 @@ class EnhancedConversationAgent:
         elif state.phase == ConversationPhase.MONITORING:
             return self._handle_monitoring(user_message, state)
         
+        elif state.phase == ConversationPhase.ESCALATION:
+            # After escalation, treat as general acknowledgment
+            return {
+                "action": "acknowledged",
+                "message": self._compose_message("A ticket has been created and our IT team will reach out to you shortly. Is there anything else I can help with?", state),
+                "phase": "escalation"
+            }
+        
+        elif state.phase == ConversationPhase.RESOLUTION:
+            # After resolution, treat as general chat or new issue
+            if any(kw in user_message.lower() for kw in ["yes", "help", "another", "new"]):
+                self.reset_conversation(state.user_email)
+                return self._handle_greeting(user_message, get_enhanced_conversation_agent().get_or_create_conversation(state.user_email))
+            return {
+                "action": "chat",
+                "message": self._compose_message("You're welcome! Feel free to reach out anytime you need IT support.", state),
+                "phase": "resolution"
+            }
+        
         return {"action": "error", "message": "Unknown conversation state"}
     
     def _handle_greeting(self, message: str, state: ConversationState) -> Dict:
@@ -499,23 +598,48 @@ class EnhancedConversationAgent:
         if greeting_only:
             return {
                 "action": "greet",
-                "message": "👋 Hi! I'm your IT Support Assistant. I'm here to help troubleshoot and fix your IT issues. What problem are you experiencing today?",
+                "message": self._compose_message("👋 Hi! I'm your IT Support Assistant. Tell me what's going wrong, and I'll help fix it. You can share a short description like: 'Outlook won't open' or 'Wi‑Fi keeps disconnecting'.", state),
                 "phase": "greeting"
             }
         else:
-            # User provided issue immediately, move to gathering
+            # User provided issue immediately, classify and route
             state.context.issue_description = message
             state.context.category = self.categorize_issue(message)
             state.phase = ConversationPhase.ISSUE_GATHERING
             
-            # Generate diagnostic questions
-            questions = self.generate_diagnostic_questions(state)
+            # If it's clearly technical, go straight to troubleshooting with actual steps
+            if state.context.is_technical:
+                state.phase = ConversationPhase.TROUBLESHOOTING
+                
+                # Get actual troubleshooting steps for the category
+                troubleshooting_steps = self.generate_troubleshooting_steps(state)
+                if troubleshooting_steps:
+                    first_step = troubleshooting_steps[0]
+                    state.context.attempted_solutions.append({
+                        "step": first_step.step_number,
+                        "instruction": first_step.instruction,
+                        "status": "in_progress"
+                    })
+                    
+                    # Generate natural LLM response with the actual step
+                    step_message = f"I can help with that! Let's start troubleshooting.\n\n🔧 Step {first_step.step_number}: {first_step.instruction}"
+                    if first_step.estimated_time:
+                        step_message += f" (about {first_step.estimated_time})"
+                    
+                    return {
+                        "action": "troubleshoot",
+                        "message": self._compose_message(step_message, state),
+                        "phase": "troubleshooting",
+                        "step": first_step.dict()
+                    }
             
-            question_text = "\n".join([f"- {q.question}" for q in questions[:2]])
+            # Otherwise, ask diagnostic questions
+            questions = self.generate_diagnostic_questions(state)
+            question_text = " ".join([q.question for q in questions[:2]])
             
             return {
                 "action": "gather_info",
-                "message": f"I understand you're having issues with **{state.context.category}**. Let me ask a few questions to help diagnose this:\n\n{question_text}",
+                "message": self._compose_message(f"Got it. Let's sort this out. {question_text}", state),
                 "phase": "issue_gathering",
                 "questions": questions
             }
@@ -537,10 +661,32 @@ class EnhancedConversationAgent:
         has_category = bool(state.context.category)
         questions_asked_count = len(state.context.questions_asked)
         
+        # Detect generic descriptions to avoid premature troubleshooting
+        generic_phrases = [
+            "i have a problem", "i have a trouble", "trouble", "problem", "issue", "not sure", "bad", "bad day", "something wrong"
+        ]
+        is_generic = any(phr in (state.context.issue_description or "").lower() for phr in generic_phrases)
+
+        # Require a specific IT signal before troubleshooting
+        it_signals = [
+            "wifi", "network", "vpn", "internet", "connection", "connect", "dns",
+            "slow", "freeze", "hang", "lag", "bsod", "crash", "error", "code",
+            "login", "password", "access", "locked", "outlook", "teams", "chrome",
+            "email", "printer", "print", "software", "app", "application", "laptop", "computer"
+        ]
+        desc = (state.context.issue_description or "").lower()
+        msg_lower = message.lower()
+        has_it_signal = any(sig in desc for sig in it_signals) or any(sig in msg_lower for sig in it_signals)
+        
         # Move to troubleshooting if: 
         # 1. We have all key info, OR
-        # 2. We've asked 2+ questions (don't loop forever)
-        should_start_troubleshooting = (has_time and has_frequency and has_category) or questions_asked_count >= 2
+        # 2. We've asked 2+ questions (don't loop forever) AND description isn't generic
+        should_start_troubleshooting = (
+            ((has_time and has_frequency and has_category) or questions_asked_count >= 2)
+            and not is_generic
+            and (state.context.category != "other" or has_it_signal)
+            and state.context.is_technical  # Only proceed if LLM confirmed it's technical
+        )
         
         if should_start_troubleshooting:
             # Move to troubleshooting
@@ -559,7 +705,7 @@ class EnhancedConversationAgent:
                 
                 return {
                     "action": "troubleshoot",
-                    "message": f"Thanks for the information! Now let's try to fix this. 🔧\n\n**Step {first_step.step_number}**: {first_step.instruction}\n\n⏱️ This should take about {first_step.estimated_time}.\n\nLet me know what happens!",
+                    "message": self._compose_message(f"Thanks for the information! Let's try to fix this. 🔧 Step {first_step.step_number}: {first_step.instruction} (about {first_step.estimated_time}). Let me know what happens.", state),
                     "phase": "troubleshooting",
                     "step": first_step
                 }
@@ -582,22 +728,65 @@ class EnhancedConversationAgent:
             questions = self.generate_diagnostic_questions(state)
             
             if questions:
-                question_text = "\n".join([f"- {q.question}" for q in questions[:2]])
+                question_text = " ".join([q.question for q in questions[:2]])
                 
                 return {
                     "action": "gather_more",
-                    "message": f"Thanks for that information. A couple more questions:\n\n{question_text}",
+                    "message": self._compose_message(f"Thanks. A quick couple of follow‑ups: {question_text} If possible, please describe the issue briefly (e.g., 'Outlook won't open' or 'Wi‑Fi disconnects').", state),
                     "phase": "issue_gathering",
                     "questions": questions
                 }
         
         # Fallback: move to troubleshooting anyway
-        state.phase = ConversationPhase.TROUBLESHOOTING
-        return self._handle_troubleshooting(message, state)
+        if not is_generic:
+            state.phase = ConversationPhase.TROUBLESHOOTING
+            return self._handle_troubleshooting(message, state)
+        
+        # Ask for a succinct issue description
+        return {
+            "action": "gather_info",
+            "message": self._compose_message("Could you share a short description of the problem (e.g., 'Outlook won't open', 'computer is slow', 'VPN fails')?", state),
+            "phase": "issue_gathering"
+        }
+    
+    def analyze_user_response_intent(self, message: str) -> str:
+        """Use LLM to understand what the user's response means."""
+        try:
+            prompt = f"""Analyze this user message in IT troubleshooting context:
+"{message}"
+
+Classify as ONE word:
+- INFORMATION: User providing diagnostic details (e.g., "VS Code using CPU", "error code 404")
+- SUCCESS: Issue resolved (e.g., "it works", "fixed", "better now")
+- FAILURE: Still not working (e.g., "no", "still slow", "didn't help")
+- QUESTION: Asking for help/clarification (e.g., "which step?", "how do I?")
+- ACKNOWLEDGMENT: Simple agreement without status (e.g., "okay", "yes", "sure")
+
+Answer with just ONE classification word."""
+            
+            response = self.model.generate_content(
+                prompt,
+                generation_config=genai.types.GenerationConfig(temperature=0.0, max_output_tokens=10),
+                safety_settings={
+                    'HARASSMENT': 'BLOCK_NONE',
+                    'HATE_SPEECH': 'BLOCK_NONE',
+                    'SEXUALLY_EXPLICIT': 'BLOCK_NONE',
+                    'DANGEROUS_CONTENT': 'BLOCK_NONE'
+                }
+            )
+            intent = (response.text or "").strip().upper()
+            logger.info(f"[LLM] Response intent: {intent} for message: {message[:50]}")
+            return intent if intent in ["INFORMATION", "SUCCESS", "FAILURE", "QUESTION", "ACKNOWLEDGMENT"] else "UNCLEAR"
+        except Exception as e:
+            logger.error(f"[LLM] Intent analysis error: {e}")
+            return "UNCLEAR"
     
     def _handle_troubleshooting(self, message: str, state: ConversationState) -> Dict:
-        """Handle troubleshooting phase."""
+        """Handle troubleshooting phase with intelligent response understanding."""
         message_lower = message.lower()
+        
+        # Analyze what the user's response means
+        intent = self.analyze_user_response_intent(message)
         
         # Check if current step succeeded
         current_solution = state.context.attempted_solutions[-1] if state.context.attempted_solutions else None
@@ -609,24 +798,21 @@ class EnhancedConversationAgent:
             current_step = next((s for s in steps if s.step_number == current_step_num), None)
             
             if current_step:
-                # Check for success indicators
-                success = any(indicator in message_lower for indicator in current_step.success_indicators)
-                failure = any(indicator in message_lower for indicator in current_step.failure_indicators)
-                
-                if success:
+                # Use intelligent intent analysis
+                if intent == "SUCCESS":
                     # Problem solved!
                     state.phase = ConversationPhase.RESOLUTION
                     state.resolved = True
                     
                     return {
                         "action": "resolved",
-                        "message": "🎉 Excellent! I'm glad that fixed the issue. Is there anything else I can help you with?",
+                        "message": self._compose_message("🎉 Excellent! I'm glad that fixed the issue. Is there anything else I can help you with?", state),
                         "phase": "resolution",
                         "create_ticket": True,
                         "ticket_status": "resolved"
                     }
                 
-                elif failure:
+                elif intent == "FAILURE":
                     # Step didn't work, try next
                     current_solution["status"] = "failed"
                     state.context.solution_feedback.append(message)
@@ -643,7 +829,7 @@ class EnhancedConversationAgent:
                         
                         return {
                             "action": "escalate",
-                            "message": f"I understand this is frustrating. Based on what we've tried, I'm escalating this to our specialist IT team:\n\n{reasons_text}\n\nThey'll reach out to you shortly with priority assistance. I'm creating a detailed ticket with everything we've discussed.",
+                            "message": self._compose_message(f"I understand this is frustrating. Based on what we've tried, I'm escalating this to our specialist IT team:\n\n{reasons_text}\n\nThey'll reach out to you shortly with priority assistance. I'm creating a detailed ticket with everything we've discussed.", state),
                             "phase": "escalation",
                             "create_ticket": True,
                             "ticket_priority": "high" if "Critical" in reasons_text else "medium"
@@ -662,15 +848,114 @@ class EnhancedConversationAgent:
                         
                         return {
                             "action": "troubleshoot",
-                            "message": f"No worries, let's try something else. 🔧\n\n**Step {next_step.step_number}**: {next_step.instruction}\n\n⏱️ Estimated time: {next_step.estimated_time}",
+                            "message": self._compose_message(f"No worries, let's try something else. 🔧 Step {next_step.step_number}: {next_step.instruction} (about {next_step.estimated_time}).", state),
                             "phase": "troubleshooting",
                             "step": next_step
                         }
+                
+                elif intent == "INFORMATION":
+                    # User is providing diagnostic information - acknowledge and ask if they want to try step
+                    state.context.solution_feedback.append(message)
+                    return {
+                        "action": "acknowledge",
+                        "message": self._compose_message(f"Got it: {message}. Based on this information, let's continue with the troubleshooting step. Have you tried it yet, or should I suggest something different?", state),
+                        "phase": "troubleshooting"
+                    }
+                
+                elif intent == "QUESTION":
+                    # User asking for clarification - re-explain the current step
+                    return {
+                        "action": "clarify",
+                        "message": self._compose_message(f"Let me clarify the current step: {current_step.instruction}. This should help with {state.context.issue_description}. Give it a try and let me know if it helps!", state),
+                        "phase": "troubleshooting"
+                    }
+                
+                elif intent == "ACKNOWLEDGMENT":
+                    # User said "okay" or "yes" without clear status - wait briefly then check
+                    return {
+                        "action": "wait_check",
+                        "message": self._compose_message("Great! Give that a try and let me know if it resolves the issue or if we need to try something else.", state),
+                        "phase": "troubleshooting"
+                    }
         
-        # Default: ask for clarification
+        # If no current step or intent suggests failure, progress to next step
+        if intent == "FAILURE" or not current_solution:
+            steps = self.generate_troubleshooting_steps(state)
+            failed_count = len([s for s in state.context.attempted_solutions if s.get("status") == "failed"]) 
+            next_index = failed_count if failed_count < len(steps) else failed_count
+            if next_index < len(steps):
+                next_step = steps[next_index]
+                state.context.attempted_solutions.append({
+                    "step": next_step.step_number,
+                    "instruction": next_step.instruction,
+                    "status": "in_progress"
+                })
+                return {
+                    "action": "troubleshoot",
+                    "message": self._compose_message(f"Understood. Let's try another approach. 🔧 Step {next_step.step_number}: {next_step.instruction} (about {next_step.estimated_time}).", state),
+                    "phase": "troubleshooting",
+                    "step": next_step
+                }
+            # If no more steps, escalate
+            should_escalate, reasons = self.should_escalate_to_human(state)
+            if should_escalate or next_index >= len(steps):
+                state.phase = ConversationPhase.ESCALATION
+                state.should_escalate = True
+                state.escalation_reasons = reasons or ["Automated steps exhausted"]
+                reasons_text = "\n".join([f"• {r}" for r in state.escalation_reasons])
+                return {
+                    "action": "escalate",
+                    "message": self._compose_message(f"Thanks for trying those steps. I'm escalating this to our specialist IT team:\n\n{reasons_text}", state),
+                    "phase": "escalation",
+                    "create_ticket": True,
+                    "ticket_priority": "high"
+                }
+
+        # If user provides new information that changes category, adapt
+        if intent == "INFORMATION":
+            new_category = self.categorize_issue(message)
+            if new_category and new_category != "other" and new_category != (state.context.category or ""):
+                state.context.category = new_category
+                state.context.issue_description += f" | {message}"  # Append new details
+                steps = self.generate_troubleshooting_steps(state)
+                if steps:
+                    first_step = steps[0]
+                    state.context.attempted_solutions.append({
+                        "step": first_step.step_number,
+                        "instruction": first_step.instruction,
+                        "status": "in_progress"
+                    })
+                    return {
+                        "action": "troubleshoot",
+                        "message": self._compose_message(f"Thanks for that information! Based on what you've told me, here's what we should try: {first_step.instruction}", state),
+                        "phase": "troubleshooting",
+                        "step": first_step
+                    }
+
+        # Default: If unclear, acknowledge and ask them to confirm
+        clarify_count = getattr(state, '_clarify_count', 0)
+        if clarify_count >= 2:
+            # Don't loop forever - after 2 clarifications, just move forward
+            steps = self.generate_troubleshooting_steps(state)
+            next_index = len(state.context.attempted_solutions)
+            if next_index < len(steps):
+                next_step = steps[next_index]
+                state.context.attempted_solutions.append({
+                    "step": next_step.step_number,
+                    "instruction": next_step.instruction,
+                    "status": "in_progress"
+                })
+                return {
+                    "action": "troubleshoot",
+                    "message": self._compose_message(f"Let me suggest the next step: {next_step.instruction}. Give this a try!", state),
+                    "phase": "troubleshooting",
+                    "step": next_step
+                }
+        
+        state._clarify_count = clarify_count + 1
         return {
             "action": "clarify",
-            "message": "Did that step help resolve the issue, or is the problem still occurring?",
+            "message": self._compose_message("Did that step help fix the issue? You can say 'yes it works', 'no still broken', or tell me what you're seeing.", state),
             "phase": "troubleshooting"
         }
     
@@ -687,7 +972,7 @@ class EnhancedConversationAgent:
             
             return {
                 "action": "resolved",
-                "message": "🎉 Perfect! I'm glad we got that sorted out. I'll close this ticket as resolved. Feel free to reach out if you need anything else!",
+                "message": self._compose_message("🎉 Perfect! I'm glad we got that sorted out. I'll close this ticket as resolved. Feel free to reach out if you need anything else!", state),
                 "phase": "resolution",
                 "create_ticket": True,
                 "ticket_status": "resolved"
@@ -699,7 +984,7 @@ class EnhancedConversationAgent:
         
         return {
             "action": "monitor",
-            "message": "Is the issue resolved now, or are you still experiencing problems?",
+            "message": self._compose_message("Is the issue resolved now, or are you still experiencing problems?", state),
             "phase": "monitoring"
         }
     

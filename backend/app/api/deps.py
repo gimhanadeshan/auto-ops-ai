@@ -82,3 +82,10 @@ def get_current_admin_user(
             detail="Not enough permissions"
         )
     return current_user
+
+
+def get_current_user_email(
+    current_user: UserDB = Depends(get_current_active_user)
+) -> str:
+    """Get email of current authenticated user."""
+    return current_user.email
