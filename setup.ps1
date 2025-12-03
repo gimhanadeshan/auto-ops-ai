@@ -39,23 +39,64 @@ if ($LASTEXITCODE -ne 0) {
 if (-not (Test-Path "backend\.env")) {
     if (Test-Path "backend\.env.example") {
         Copy-Item "backend\.env.example" "backend\.env"
+        Write-Host "Created backend\.env from example" -ForegroundColor Green
+        Write-Host "⚠️  IMPORTANT: Edit backend\.env and add your GOOGLE_API_KEY before the vector database can be created!" -ForegroundColor Yellow
+    } else {
+        Write-Host "WARNING: No .env.example found. Please create backend\.env manually." -ForegroundColor Yellow
     }
 }
 
-# Initialize vector database
-Write-Host "Initializing vector database..." -ForegroundColor Green
-& .\venv\Scripts\Activate.ps1
-Set-Location backend
-& ..\venv\Scripts\python.exe -c "
-try:
-    from app.services.vector_db import get_vector_db_service
-    service = get_vector_db_service()
-    collection = service.get_or_create_collection()
-    print(f'Vector database initialized with {collection.count()} documents')
-except Exception as e:
-    print(f'Vector database initialized (empty - add ticket data later)')
-" 2>$null
-Set-Location ..
+# Check if required data file exists
+$dataFile = "data\raw\ticketing_system_data_new.json"
+if (-not (Test-Path $dataFile)) {
+    Write-Host ""
+    Write-Host "⚠️  WARNING: Required data file not found: $dataFile" -ForegroundColor Yellow
+    Write-Host "Vector database creation will be skipped." -ForegroundColor Yellow
+    Write-Host "Please add the data file and run: .\venv\Scripts\python.exe backend\ingestion_script.py" -ForegroundColor Cyan
+} else {
+    # Check if GOOGLE_API_KEY is configured
+    $envContent = Get-Content "backend\.env" -ErrorAction SilentlyContinue
+    $hasApiKey = $envContent | Where-Object { $_ -match "^GOOGLE_API_KEY=.+(?<!your-google-api-key-here)$" }
+    
+    if (-not $hasApiKey) {
+        Write-Host ""
+        Write-Host "⚠️  GOOGLE_API_KEY not configured in backend\.env" -ForegroundColor Yellow
+        Write-Host "Skipping vector database creation." -ForegroundColor Yellow
+        Write-Host "To create the vector database later:" -ForegroundColor Cyan
+        Write-Host "  1. Add your GOOGLE_API_KEY to backend\.env" -ForegroundColor White
+        Write-Host "  2. Run: .\venv\Scripts\python.exe backend\ingestion_script.py" -ForegroundColor White
+    } else {
+        # Initialize vector database
+        Write-Host ""
+        Write-Host "=========================================" -ForegroundColor Cyan
+        Write-Host "Creating Vector Database" -ForegroundColor Cyan
+        Write-Host "=========================================" -ForegroundColor Cyan
+        Write-Host "This will create embeddings from the ticket data..." -ForegroundColor White
+        Write-Host "This may take a few minutes depending on data size..." -ForegroundColor White
+        Write-Host ""
+
+        Set-Location backend
+
+        $ingestionOutput = & ..\venv\Scripts\python.exe ingestion_script.py 2>&1
+        $ingestionExitCode = $LASTEXITCODE
+
+        Write-Host $ingestionOutput
+
+        Set-Location ..
+
+        if ($ingestionExitCode -eq 0) {
+            Write-Host ""
+            Write-Host "✅ Vector database created successfully!" -ForegroundColor Green
+            Write-Host "   Location: backend\data\processed\chroma_db" -ForegroundColor Gray
+        } else {
+            Write-Host ""
+            Write-Host "❌ Vector database creation failed!" -ForegroundColor Red
+            Write-Host "   Please check the error messages above." -ForegroundColor Yellow
+            Write-Host "   You can retry later by running:" -ForegroundColor Cyan
+            Write-Host "   .\venv\Scripts\python.exe backend\ingestion_script.py" -ForegroundColor White
+        }
+    }
+}
 
 Write-Host ""
 Write-Host "=========================================" -ForegroundColor Green
@@ -63,6 +104,23 @@ Write-Host "Setup Complete!" -ForegroundColor Green
 Write-Host "=========================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "Next Steps:" -ForegroundColor Yellow
-Write-Host "1. Edit backend\.env and add your API key" -ForegroundColor White
-Write-Host "2. Run the application: .\run.ps1" -ForegroundColor White
+
+# Check if vector DB was created
+if (Test-Path "backend\data\processed\chroma_db") {
+    Write-Host "✅ Vector database is ready!" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "To start the application:" -ForegroundColor Cyan
+    Write-Host "  .\run.ps1" -ForegroundColor White
+} else {
+    Write-Host "⚠️  Vector database not yet created" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "To create the vector database:" -ForegroundColor Cyan
+    Write-Host "  1. Ensure data file exists: data\raw\ticketing_system_data_new.json" -ForegroundColor White
+    Write-Host "  2. Add your GOOGLE_API_KEY to backend\.env" -ForegroundColor White
+    Write-Host "  3. Run: .\venv\Scripts\python.exe backend\ingestion_script.py" -ForegroundColor White
+    Write-Host ""
+    Write-Host "Then start the application:" -ForegroundColor Cyan
+    Write-Host "  .\run.ps1" -ForegroundColor White
+}
+
 Write-Host ""
