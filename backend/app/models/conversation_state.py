@@ -62,6 +62,10 @@ class ConversationContext(BaseModel):
     questions_asked: List[str] = []
     user_frustration_level: int = 0  # 0-10 scale
     confidence_score: float = 0.0  # 0-1 scale for issue identification
+    
+    # LLM classifications
+    is_technical: bool = False
+    message_type: Optional[str] = None  # technical_issue, general_chat, non_it
 
 
 class ConversationState(BaseModel):

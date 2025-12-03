@@ -49,6 +49,9 @@ class Settings(BaseSettings):
     
     # Logging
     log_level: str = "INFO"
+
+    # Conversation behavior
+    conversation_llm_first: bool = True
     
     def get_allowed_origins_list(self) -> List[str]:
         """Convert the comma-separated string to a list."""

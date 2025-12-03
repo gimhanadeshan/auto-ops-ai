@@ -49,6 +49,13 @@ function TicketList() {
 
   useEffect(() => {
     fetchTickets()
+    
+    // Auto-refresh tickets every 5 seconds to show priority changes
+    const interval = setInterval(() => {
+      fetchTickets()
+    }, 5000)
+    
+    return () => clearInterval(interval)
   }, [])
 
   const fetchTickets = async () => {
@@ -85,6 +92,10 @@ function TicketList() {
       return TICKET_PRIORITY_LABELS[num] || 'Medium'
     }
     return TICKET_PRIORITY_LABELS[priority] || 'Medium'
+  }
+
+  const isCriticalPriority = (priority) => {
+    return priority === 'critical' || priority === 1
   }
 
   const getStatusBadge = (status) => {
