@@ -50,3 +50,28 @@ export async function sendChatMessage(messages, userEmail, ticketId = null) {
     throw new Error(err.message || 'Failed to send message');
   }
 }
+
+export async function resetChatConversation(userEmail) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/chat/reset`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        user_email: userEmail
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.detail || `Server error: ${response.status}`);
+    }
+
+    return response.json();
+  } catch (err) {
+    console.warn('Failed to reset conversation:', err.message);
+    // Don't throw - this is a background operation
+    return null;
+  }
+}

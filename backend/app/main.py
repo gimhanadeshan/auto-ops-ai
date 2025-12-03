@@ -97,8 +97,8 @@ except Exception as e:
     logger.warning(f"Could not include status endpoint at startup: {e}")
 
 # Import other endpoints individually so optional heavy dependencies don't break startup
-# Use chat_simple (LLM-first approach) instead of complex chat endpoint
-for _name, _tag in (("auth", "Authentication"), ("chat_simple", "Chat"), ("tickets", "Tickets"), ("dashboard", "Dashboard"), ("monitoring", "Monitoring")):
+# Use chat_enhanced (LLM-First with intelligent RAG) for the main chat
+for _name, _tag in (("auth", "Authentication"), ("chat_enhanced", "Chat"), ("tickets", "Tickets"), ("dashboard", "Dashboard"), ("monitoring", "Monitoring")):
     try:
         mod = importlib.import_module(f"app.api.endpoints.{_name}")
         # Monitoring endpoint gets its own prefix path

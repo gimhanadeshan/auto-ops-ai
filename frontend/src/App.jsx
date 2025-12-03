@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom'
-import { fetchBackendStatus, sendChatMessage } from './api'
+import { fetchBackendStatus, sendChatMessage, resetChatConversation } from './api'
 import TicketList from './components/TicketList'
 import Login from './components/Login'
 import Register from './components/Register'
@@ -33,7 +33,15 @@ function ChatPage({ user, onLogout }) {
     fetchBackendStatus()
       .then(data => setBackendStatus(data))
       .catch(err => console.error('Backend status check failed:', err))
-  }, [])
+    
+    // Reset conversation on the backend when chat page loads
+    // This ensures a fresh start when user refreshes or navigates to chat
+    if (user?.email) {
+      resetChatConversation(user.email)
+        .then(() => console.log('Conversation reset for fresh start'))
+        .catch(err => console.warn('Could not reset conversation:', err))
+    }
+  }, [user?.email])
 
   const handleSend = async () => {
     if (!input.trim() || loading) return
