@@ -9,7 +9,7 @@ Write-Host "Creating directories..." -ForegroundColor Green
 New-Item -ItemType Directory -Force -Path "data\processed", "data\raw", "logs", "backend\data\processed" | Out-Null
 
 # Check Python version
-$pythonVersion = python --version 2>&1
+$pythonVersion = py --version 2>&1
 Write-Host "Python version: $pythonVersion" -ForegroundColor Green
 
 # Determine requirements file
@@ -22,7 +22,7 @@ if ($pythonVersion -like "*3.14*") {
 # Create virtual environment
 Write-Host "Creating virtual environment..." -ForegroundColor Green
 if (-not (Test-Path "venv")) {
-    python -m venv venv
+    py -m venv venv
 }
 
 # Install dependencies

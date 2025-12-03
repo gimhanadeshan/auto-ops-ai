@@ -19,12 +19,16 @@ from app.services.agents.llm_conversation_agent import get_llm_conversation_agen
 from app.services.dataset_analyzer import DatasetAnalyzer
 from app.core.database import get_db
 from sqlalchemy.orm import Session
+import os
 
 logger = logging.getLogger(__name__)
 
 # Setup dedicated chat logger
 chat_logger = logging.getLogger('chat_conversation')
 if not chat_logger.handlers:
+    # Ensure logs directory exists
+    log_dir = 'app/logs'
+    os.makedirs(log_dir, exist_ok=True)
     chat_handler = logging.FileHandler('app/logs/chat.log')
     chat_handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
     chat_logger.addHandler(chat_handler)
