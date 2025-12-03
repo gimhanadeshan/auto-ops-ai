@@ -10,9 +10,6 @@ from app.models.ticket import (
     TicketDB, TicketCreate, TicketUpdate, TicketStatus,
     TicketPriority, TicketCategory
 )
-from app.services.agents.triage_agent import get_triage_agent
-from app.services.agents.troubleshooter import get_troubleshooter_agent
-
 logger = logging.getLogger(__name__)
 
 
@@ -30,43 +27,18 @@ class TicketService:
             description=ticket_data.description,
             user_email=ticket_data.user_email,
             status=TicketStatus.OPEN,
-            priority=TicketPriority.MEDIUM
+            priority=ticket_data.priority or TicketPriority.MEDIUM,
+            category=ticket_data.category or TicketCategory.OTHER
         )
         
-        # Run AI triage analysis
+        # Simple ticket creation - AI analysis happens in chat endpoint
+        # The multi-agent system in /chat provides better analysis
         try:
-            triage_agent = get_triage_agent()
-            analysis = triage_agent.analyze_ticket(
-                ticket_data.title,
-                ticket_data.description
-            )
-            
-            # Update ticket with AI analysis
-            db_ticket.category = analysis["category"]
-            db_ticket.priority = analysis["priority"]
-            db_ticket.ai_analysis = f"{analysis['analysis']}\n\nConfidence: {analysis['confidence']}\nReasoning: {analysis['reasoning']}"
-            
-            # Get suggested assignment
-            db_ticket.assigned_to = triage_agent.suggest_assignment(
-                analysis["category"],
-                analysis["priority"]
-            )
-            
-            # If it's a system issue, generate troubleshooting steps
-            if analysis["category"] == TicketCategory.SYSTEM_ISSUE:
-                troubleshooter = get_troubleshooter_agent()
-                steps = troubleshooter.generate_troubleshooting_steps(
-                    ticket_data.title,
-                    ticket_data.description,
-                    str(analysis["category"])
-                )
-                db_ticket.troubleshooting_steps = "\n".join(
-                    f"{i+1}. {step}" for i, step in enumerate(steps)
-                )
+            db_ticket.ai_analysis = "Ticket created. Use /chat endpoint for AI-powered troubleshooting."
             
         except Exception as e:
-            logger.error(f"Error in AI analysis: {e}")
-            db_ticket.ai_analysis = f"Error during analysis: {str(e)}"
+            logger.error(f"Error in ticket creation: {e}")
+            db_ticket.ai_analysis = f"Error during creation: {str(e)}"
         
         db.add(db_ticket)
         db.commit()
@@ -183,37 +155,6 @@ class TicketService:
             }
         }
     
-    @staticmethod
-    def run_troubleshooting(db: Session, ticket_id: int) -> Optional[TicketDB]:
-        """Run full troubleshooting workflow for a ticket."""
-        db_ticket = db.query(TicketDB).filter(TicketDB.id == ticket_id).first()
-        
-        if not db_ticket:
-            return None
-        
-        try:
-            troubleshooter = get_troubleshooter_agent()
-            result = troubleshooter.handle_issue(
-                db_ticket.title,
-                db_ticket.description,
-                str(db_ticket.category)
-            )
-            
-            # Update ticket with results
-            db_ticket.troubleshooting_steps = "\n".join(
-                f"{i+1}. {step}" for i, step in enumerate(result["troubleshooting_steps"])
-            )
-            db_ticket.resolution = result["suggested_resolution"]
-            db_ticket.ai_analysis = f"{db_ticket.ai_analysis}\n\nDiagnostics:\n{result['diagnostics']}"
-            
-            db.commit()
-            db.refresh(db_ticket)
-            
-        except Exception as e:
-            logger.error(f"Error running troubleshooting: {e}")
-        
-        return db_ticket
-
 
 # Create global service instance
 ticket_service = TicketService()
