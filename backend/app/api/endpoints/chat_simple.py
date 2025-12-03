@@ -111,11 +111,25 @@ async def chat(
         
         # Step 1: Quick check if this seems technical
         tech_keywords = [
-            "computer", "laptop", "slow", "crash", "error", "wifi", "network",
-            "software", "app", "application", "login", "password", "printer", "email",
-            "iphone", "ipad", "android", "phone", "mobile", "tablet", "device",
-            "chrome", "edge", "browser", "outlook", "teams", "vpn", "cpu", "memory",
-            "disk", "freeze", "hang", "not responding", "blue screen", "bsod"
+            # Computers & Devices
+            "computer", "laptop", "desktop", "pc", "mac", "macbook", "imac",
+            "phone", "mobile", "iphone", "ipad", "android", "tablet", "device",
+            # Gaming devices
+            "playstation", "ps4", "ps5", "xbox", "nintendo", "switch", "gaming", "console",
+            # Peripherals
+            "printer", "scanner", "monitor", "keyboard", "mouse", "webcam", "headset",
+            # Software & Apps
+            "software", "app", "application", "program", "install", "update",
+            "chrome", "edge", "firefox", "browser", "outlook", "teams", "zoom", "slack",
+            # Network
+            "wifi", "network", "internet", "connection", "vpn", "router", "ethernet",
+            # Issues
+            "slow", "crash", "error", "freeze", "hang", "not working", "broken",
+            "not responding", "blue screen", "bsod", "bug", "issue", "problem",
+            # Account
+            "login", "password", "account", "access", "locked",
+            # Hardware
+            "cpu", "memory", "ram", "disk", "storage", "battery", "charging"
         ]
         seems_technical = any(kw in user_message.lower() for kw in tech_keywords)
         
@@ -381,18 +395,20 @@ async def chat(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/chat/reset")
-async def reset_chat(
+class ResetRequest(BaseModel):
     user_email: Optional[str] = None
-):
+
+
+@router.post("/chat/reset")
+async def reset_chat(request: ResetRequest):
     """Reset conversation history for user."""
     try:
-        if not user_email:
-            user_email = "anonymous@autoops.ai"
+        user_email = request.user_email or "anonymous@autoops.ai"
         
         llm_agent = get_llm_conversation_agent()
         llm_agent.reset_conversation(user_email)
-        return {"message": "Conversation reset successfully"}
+        logger.info(f"[CHAT] Conversation reset for {user_email}")
+        return {"message": "Conversation reset successfully", "user_email": user_email}
     except Exception as e:
         logger.error(f"[CHAT] Reset error: {e}")
         raise HTTPException(status_code=500, detail="Failed to reset conversation")

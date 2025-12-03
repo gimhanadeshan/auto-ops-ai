@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom'
+import { fetchBackendStatus, sendChatMessage, resetChatConversation } from './api'
 import { Bot, User, Send, FileText, AlertCircle, Zap, Wrench, HelpCircle } from 'lucide-react'
-import { fetchBackendStatus, sendChatMessage } from './api'
 import { STORAGE_KEYS } from './config/constants'
 import Sidebar from './components/Sidebar'
 import Dashboard from './components/Dashboard'
@@ -41,7 +41,15 @@ function ChatPage({ user }) {
     fetchBackendStatus()
       .then(data => setBackendStatus(data))
       .catch(err => console.error('Backend status check failed:', err))
-  }, [])
+    
+    // Reset conversation on the backend when chat page loads
+    // This ensures a fresh start when user refreshes or navigates to chat
+    if (user?.email) {
+      resetChatConversation(user.email)
+        .then(() => console.log('Conversation reset for fresh start'))
+        .catch(err => console.warn('Could not reset conversation:', err))
+    }
+  }, [user?.email])
 
   const handleSend = async () => {
     if (!input.trim() || loading) return

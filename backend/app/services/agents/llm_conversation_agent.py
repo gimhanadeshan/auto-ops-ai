@@ -146,6 +146,30 @@ Remember: Be helpful, concise, and human-like. One clear step at a time!
             }
         """
         try:
+            # Check if this looks like a fresh conversation start
+            # Reset conversation if user sends a simple greeting after having previous history
+            greeting_patterns = ['hi', 'hello', 'hey', 'good morning', 'good afternoon', 'good evening']
+            is_greeting = user_message.lower().strip() in greeting_patterns
+            
+            existing_history = self.conversations.get(user_email, [])
+            
+            # If user sends a greeting and there's existing history, 
+            # check if we should reset (they might have refreshed the page)
+            if is_greeting and len(existing_history) >= 4:
+                # Check time gap - if last message was > 5 minutes ago, reset
+                if existing_history:
+                    last_msg = existing_history[-1]
+                    last_time_str = last_msg.get('timestamp', '')
+                    if last_time_str:
+                        try:
+                            last_time = datetime.fromisoformat(last_time_str)
+                            time_gap = (datetime.utcnow() - last_time).total_seconds()
+                            if time_gap > 300:  # 5 minutes
+                                logger.info(f"[LLM] Resetting conversation for {user_email} - greeting after {time_gap:.0f}s gap")
+                                self.reset_conversation(user_email)
+                        except:
+                            pass
+            
             # Add user message to history
             self.add_message(user_email, "user", user_message)
             
@@ -245,6 +269,129 @@ Remember: Be helpful, concise, and human-like. One clear step at a time!
                     return True
         
         return False
+    
+    def classify_message(self, user_message: str, conversation_history: Optional[List] = None) -> Dict:
+        """
+        Fast LLM-based message classification.
+        This determines if a message is technical/IT-related BEFORE doing RAG search.
+        
+        Args:
+            user_message: The user's current message
+            conversation_history: Optional conversation context
+        
+        Returns:
+            {
+                "is_technical": bool,
+                "category": str (technical/general/greeting),
+                "urgency": str (low/medium/high/critical),
+                "topic": str (brief description of the issue)
+            }
+        """
+        try:
+            # Build classification prompt
+            classification_prompt = f"""You are a message classifier for an IT support system.
+Analyze the following user message and determine if it's a technical/IT support issue.
+
+User Message: "{user_message}"
+
+Respond with ONLY a JSON object (no markdown, no explanation):
+{{
+    "is_technical": true/false,
+    "category": "technical" or "general" or "greeting",
+    "urgency": "low" or "medium" or "high" or "critical",
+    "topic": "brief description if technical, empty string if not"
+}}
+
+Classification Rules:
+- "technical" = Any IT/tech issue: computer, laptop, phone, software, network, printer, email, apps, devices, gaming consoles (PlayStation, Xbox, Nintendo), slow performance, crashes, errors, connectivity, etc.
+- "greeting" = Simple greetings like hi, hello, hey, good morning
+- "general" = Non-technical chat, questions about services, or unrelated topics
+
+Urgency Guidelines:
+- "critical" = System down, can't work at all, security breach
+- "high" = Significant productivity impact, urgent deadline
+- "medium" = Annoying but can work around it
+- "low" = Minor inconvenience, nice-to-fix
+
+Examples:
+- "my laptop is slow" -> {{"is_technical": true, "category": "technical", "urgency": "medium", "topic": "slow laptop performance"}}
+- "playstation not connecting to wifi" -> {{"is_technical": true, "category": "technical", "urgency": "medium", "topic": "PlayStation WiFi connectivity"}}
+- "hi there" -> {{"is_technical": false, "category": "greeting", "urgency": "low", "topic": ""}}
+- "what time does the office close?" -> {{"is_technical": false, "category": "general", "urgency": "low", "topic": ""}}
+- "can't access email, urgent client meeting in 1 hour" -> {{"is_technical": true, "category": "technical", "urgency": "critical", "topic": "email access issue before urgent meeting"}}
+
+JSON only:"""
+
+            # Use lower temperature for classification (more deterministic)
+            classification_model = genai.GenerativeModel(
+                settings.gemini_model,
+                generation_config=genai.types.GenerationConfig(
+                    temperature=0.1,  # Low temperature for consistent classification
+                    max_output_tokens=150
+                )
+            )
+            
+            response = classification_model.generate_content(classification_prompt)
+            
+            if response and response.text:
+                import json
+                # Clean up response (remove markdown if present)
+                text = response.text.strip()
+                if text.startswith("```"):
+                    text = text.split("```")[1]
+                    if text.startswith("json"):
+                        text = text[4:]
+                text = text.strip()
+                
+                try:
+                    result = json.loads(text)
+                    logger.info(f"[LLM-Classify] Message classified: {result}")
+                    return result
+                except json.JSONDecodeError as e:
+                    logger.warning(f"[LLM-Classify] JSON parse error: {e}, raw: {text}")
+                    # Fallback: simple keyword detection
+                    return self._fallback_classification(user_message)
+            else:
+                logger.warning("[LLM-Classify] Empty response, using fallback")
+                return self._fallback_classification(user_message)
+                
+        except Exception as e:
+            logger.error(f"[LLM-Classify] Error: {e}")
+            return self._fallback_classification(user_message)
+    
+    def _fallback_classification(self, user_message: str) -> Dict:
+        """Fallback keyword-based classification if LLM fails."""
+        msg_lower = user_message.lower()
+        
+        # Check for greetings
+        greetings = ['hi', 'hello', 'hey', 'good morning', 'good afternoon', 'good evening', 'howdy']
+        if msg_lower.strip() in greetings:
+            return {
+                "is_technical": False,
+                "category": "greeting",
+                "urgency": "low",
+                "topic": ""
+            }
+        
+        # Check for technical keywords
+        tech_keywords = [
+            "computer", "laptop", "slow", "crash", "error", "wifi", "network",
+            "software", "app", "application", "login", "password", "printer",
+            "outlook", "email", "teams", "chrome", "browser", "windows", "mac",
+            "cpu", "memory", "disk", "freeze", "not working", "broken", "fix",
+            "help", "issue", "problem", "phone", "iphone", "android", "tablet",
+            "playstation", "ps4", "ps5", "xbox", "nintendo", "switch", "gaming", "console",
+            "monitor", "screen", "keyboard", "mouse", "bluetooth", "internet"
+        ]
+        
+        is_technical = any(kw in msg_lower for kw in tech_keywords)
+        
+        return {
+            "is_technical": is_technical,
+            "category": "technical" if is_technical else "general",
+            "urgency": "medium" if is_technical else "low",
+            "topic": "technical issue" if is_technical else ""
+        }
     
     def reset_conversation(self, user_email: str):
         """Clear conversation history."""
