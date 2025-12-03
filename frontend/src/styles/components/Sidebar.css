@@ -114,6 +114,7 @@
   font-weight: var(--font-weight-medium);
   transition: all var(--transition-base);
   cursor: pointer;
+  position: relative;
 }
 
 .nav-item:hover {
@@ -127,6 +128,26 @@
   color: var(--color-primary);
   border-left: 3px solid var(--color-primary);
   padding-left: calc(var(--space-md) - 3px);
+}
+
+.nav-item.admin-only {
+  background: rgba(220, 38, 38, 0.05);
+}
+
+.nav-item.admin-only:hover {
+  background: rgba(220, 38, 38, 0.1);
+}
+
+.admin-badge {
+  margin-left: auto;
+  background: #dc3545;
+  color: white;
+  font-size: 0.65rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .nav-item svg {

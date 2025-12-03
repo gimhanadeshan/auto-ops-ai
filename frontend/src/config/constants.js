@@ -15,6 +15,16 @@ export const API_ENDPOINTS = {
     REFRESH: '/api/v1/refresh'
   },
   
+  // Authorization endpoints
+  AUTHORIZATION: {
+    AUTHORIZE_ACTION: '/api/v1/authorize-action',
+    CAPABILITIES: '/api/v1/capabilities',
+    CHECK_PERMISSION: '/api/v1/permissions/check',
+    AUDIT_LOG: '/api/v1/audit-log',
+    ALL_PERMISSIONS: '/api/v1/permissions/all',
+    ROLES: '/api/v1/roles'
+  },
+  
   // Chat endpoints
   CHAT: {
     SEND_MESSAGE: '/api/chat',

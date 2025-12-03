@@ -1,5 +1,7 @@
 // Central export for all services
 export { authService } from './authService'
+export { authorizationService } from './authorizationService'
+export { userService } from './userService'
 export { chatService } from './chatService'
 export { ticketService } from './ticketService'
 export { monitoringService } from './monitoringService'

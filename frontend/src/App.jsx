@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-ro
 import { fetchBackendStatus, sendChatMessage, resetChatConversation } from './api'
 import { Bot, User, Send, FileText, AlertCircle, Zap, Wrench, HelpCircle } from 'lucide-react'
 import { STORAGE_KEYS } from './config/constants'
+import { authorizationService } from './services'
 import Sidebar from './components/Sidebar'
 import Dashboard from './components/Dashboard'
 import TicketList from './components/TicketList'
@@ -11,6 +12,7 @@ import Reports from './components/Reports'
 import Settings from './components/Settings'
 import AutomationPage from './components/AutomationPage'
 import KnowledgeBasePage from './components/KnowledgeBasePage'
+import UserManagement from './components/UserManagement'
 import Login from './components/Login'
 import Register from './components/Register'
 import './styles/App.css'
@@ -209,9 +211,18 @@ function ChatPage({ user }) {
 }
 
 function MainLayout({ user, onLogout }) {
+  const [capabilities, setCapabilities] = useState(null)
+
+  useEffect(() => {
+    // Load user capabilities
+    authorizationService.getUserCapabilities()
+      .then(caps => setCapabilities(caps))
+      .catch(err => console.error('Failed to load capabilities:', err))
+  }, [])
+
   return (
     <div className="main-layout">
-      <Sidebar user={user} onLogout={onLogout} />
+      <Sidebar user={user} capabilities={capabilities} onLogout={onLogout} />
       <div className="main-content">
         <Routes>
           <Route path="/dashboard" element={<Dashboard user={user} />} />
@@ -222,6 +233,9 @@ function MainLayout({ user, onLogout }) {
           <Route path="/automation" element={<AutomationPage />} />
           <Route path="/knowledge-base" element={<KnowledgeBasePage />} />
           <Route path="/settings" element={<Settings user={user} />} />
+          {capabilities?.tier === 'admin' && (
+            <Route path="/users" element={<UserManagement currentUser={user} />} />
+          )}
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </div>

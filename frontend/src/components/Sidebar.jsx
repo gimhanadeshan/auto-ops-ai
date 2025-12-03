@@ -9,16 +9,18 @@ import {
   LogOut, 
   Bot,
   User,
+  Users,
   Shield,
   Bell,
   Database,
   Zap
 } from 'lucide-react'
 import ThemeToggle from './ThemeToggle'
+import { authorizationService } from '../services'
 import '../styles/components/Sidebar.css'
 
-function Sidebar({ user, onLogout }) {
-  const navItems = [
+function Sidebar({ user, capabilities, onLogout }) {
+  const baseNavItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/chat', icon: MessageSquare, label: 'AI Support Chat' },
     { path: '/tickets', icon: FileText, label: 'Tickets' },
@@ -26,8 +28,26 @@ function Sidebar({ user, onLogout }) {
     { path: '/reports', icon: BarChart3, label: 'Reports & Analytics' },
     { path: '/automation', icon: Zap, label: 'Automation Rules' },
     { path: '/knowledge-base', icon: Database, label: 'Knowledge Base' },
+  ]
+
+  // Add admin-only items
+  const navItems = [
+    ...baseNavItems,
+    ...(capabilities?.tier === 'admin' ? [
+      { path: '/users', icon: Users, label: 'User Management', adminOnly: true }
+    ] : []),
     { path: '/settings', icon: Settings, label: 'Settings' }
   ]
+
+  const getTierColor = () => {
+    if (!user?.tier) return '#6c757d'
+    return authorizationService.getTierColor(user.tier)
+  }
+
+  const formatTier = () => {
+    if (!user?.tier) return 'Standard'
+    return authorizationService.formatTier(user.tier)
+  }
 
   return (
     <aside className="sidebar">
@@ -47,9 +67,21 @@ function Sidebar({ user, onLogout }) {
         </div>
         <div className="user-info">
           <span className="user-name">{user?.name || 'Guest'}</span>
-          <span className="user-tier">
+          <span 
+            className="user-tier"
+            style={{ 
+              backgroundColor: getTierColor(),
+              color: 'white',
+              padding: '0.25rem 0.5rem',
+              borderRadius: '4px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.25rem',
+              fontSize: '0.75rem'
+            }}
+          >
             <Shield size={12} />
-            {user?.tier || 'Standard'}
+            {formatTier()}
           </span>
         </div>
       </div>
@@ -59,10 +91,13 @@ function Sidebar({ user, onLogout }) {
           <NavLink
             key={item.path}
             to={item.path}
-            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+            className={({ isActive }) => 
+              `nav-item ${isActive ? 'active' : ''} ${item.adminOnly ? 'admin-only' : ''}`
+            }
           >
             <item.icon size={20} />
             <span>{item.label}</span>
+            {item.adminOnly && <span className="admin-badge">Admin</span>}
           </NavLink>
         ))}
       </nav>

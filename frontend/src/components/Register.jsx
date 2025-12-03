@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bot, Mail, Lock, User, Shield, CheckCircle, AlertTriangle, UserPlus } from 'lucide-react'
-import { authService } from '../services/authService'
+import { Bot, Mail, Lock, User, Shield, CheckCircle, AlertTriangle, UserPlus, Info, Briefcase, Users as UsersIcon, UserCog } from 'lucide-react'
+import { authService, authorizationService } from '../services'
 import '../styles/components/Auth.css'
 
 function Register() {
@@ -15,13 +15,57 @@ function Register() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(false)
+  const [passwordStrength, setPasswordStrength] = useState(0)
   const navigate = useNavigate()
 
   const handleChange = (e) => {
+    const { name, value } = e.target
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value
+      [name]: value
     })
+
+    // Calculate password strength
+    if (name === 'password') {
+      let strength = 0
+      if (value.length >= 6) strength++
+      if (value.length >= 10) strength++
+      if (/[A-Z]/.test(value)) strength++
+      if (/[0-9]/.test(value)) strength++
+      if (/[^A-Za-z0-9]/.test(value)) strength++
+      setPasswordStrength(Math.min(strength, 4))
+    }
+  }
+
+  const getPasswordStrengthLabel = () => {
+    const labels = ['Very Weak', 'Weak', 'Fair', 'Good', 'Strong']
+    return labels[passwordStrength] || 'Very Weak'
+  }
+
+  const getPasswordStrengthColor = () => {
+    const colors = ['#ef4444', '#f97316', '#fbbf24', '#10b981', '#059669']
+    return colors[passwordStrength] || '#ef4444'
+  }
+
+  const getTierInfo = (tier) => {
+    const info = {
+      contractor: {
+        description: 'Limited access for external users',
+        permissions: 'View own tickets, execute SAFE actions (with approval)',
+        icon: Lock
+      },
+      staff: {
+        description: 'Regular employee access',
+        permissions: 'View all tickets, execute SAFE and LOW risk actions',
+        icon: UsersIcon
+      },
+      manager: {
+        description: 'Department manager privileges',
+        permissions: 'Update all tickets, execute up to MEDIUM risk actions, edit knowledge base',
+        icon: Briefcase
+      }
+    }
+    return info[tier] || info.staff
   }
 
   const handleSubmit = async (e) => {
@@ -97,9 +141,9 @@ function Register() {
       <div className="auth-card register-card">
         <div className="auth-header">
           <div className="auth-icon">
-            <Bot size={48} strokeWidth={2} />
+            <Bot size={48} strokeWidth={1.5} />
           </div>
-          <h1>Auto-Ops-AI</h1>
+          <h1>Auto-Ops AI</h1>
           <p>AI-powered IT Support Assistant</p>
         </div>
 
@@ -147,24 +191,6 @@ function Register() {
 
             <div className="form-group">
               <label>
-                <Shield size={16} />
-                <span>User Tier</span>
-              </label>
-              <select
-                name="tier"
-                value={formData.tier}
-                onChange={handleChange}
-                className="tier-select"
-              >
-                <option value="staff">Staff</option>
-                <option value="manager">Manager</option>
-                <option value="contractor">Contractor</option>
-              </select>
-              <small>Managers get higher priority on tickets</small>
-            </div>
-
-            <div className="form-group">
-              <label>
                 <Lock size={16} />
                 <span>Password</span>
               </label>
@@ -173,15 +199,30 @@ function Register() {
                 name="password"
                 value={formData.password}
                 onChange={handleChange}
-                placeholder="••••••••"
+                placeholder="Minimum 6 characters"
                 required
                 autoComplete="new-password"
                 minLength={6}
               />
-              <small>Minimum 6 characters</small>
+              {formData.password && (
+                <div className="password-strength">
+                  <div className="strength-bar">
+                    <div 
+                      className="strength-fill" 
+                      style={{ 
+                        width: `${(passwordStrength / 4) * 100}%`,
+                        backgroundColor: getPasswordStrengthColor()
+                      }}
+                    />
+                  </div>
+                  <span style={{ color: getPasswordStrengthColor() }}>
+                    {getPasswordStrengthLabel()}
+                  </span>
+                </div>
+              )}
             </div>
 
-            <div className="form-group form-group-full">
+            <div className="form-group">
               <label>
                 <Lock size={16} />
                 <span>Confirm Password</span>
@@ -191,16 +232,48 @@ function Register() {
                 name="confirmPassword"
                 value={formData.confirmPassword}
                 onChange={handleChange}
-                placeholder="••••••••"
+                placeholder="Re-enter password"
                 required
                 autoComplete="new-password"
               />
+              {formData.confirmPassword && formData.password !== formData.confirmPassword && (
+                <small className="error-hint">Passwords do not match</small>
+              )}
+            </div>
+
+            <div className="form-group form-group-full tier-selection">
+              <label>
+                <Shield size={16} />
+                <span>User Tier (Role)</span>
+              </label>
+              <div className="tier-options">
+                {['contractor', 'staff', 'manager'].map(tier => {
+                  const TierIcon = getTierInfo(tier).icon
+                  return (
+                    <div 
+                      key={tier}
+                      className={`tier-option ${formData.tier === tier ? 'selected' : ''}`}
+                      onClick={() => setFormData({ ...formData, tier })}
+                    >
+                      <div className="tier-header">
+                        <TierIcon size={20} className="tier-icon" />
+                        <span className="tier-name">{authorizationService.formatTier(tier)}</span>
+                        {formData.tier === tier && <CheckCircle size={16} className="check-icon" />}
+                      </div>
+                      <p className="tier-description">{getTierInfo(tier).description}</p>
+                      <small className="tier-permissions">
+                        <Info size={12} /> {getTierInfo(tier).permissions}
+                      </small>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           </div>
 
           <button type="submit" className="auth-btn" disabled={loading}>
             <UserPlus size={18} />
-            <span>{loading ? 'Creating Account...' : 'Register'}</span>
+            <span>{loading ? 'Creating Account...' : 'Create Account'}</span>
           </button>
 
           <div className="auth-switch">
