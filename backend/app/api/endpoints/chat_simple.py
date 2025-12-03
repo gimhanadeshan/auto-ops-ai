@@ -294,33 +294,71 @@ async def chat(
             except Exception as e:
                 logger.error(f"[TICKET] Error escalating: {e}", exc_info=True)
         
-        # Intelligent resolution detection
+        # Intelligent status management with TicketStatusAgent
+        # Handles: OPEN → IN_PROGRESS → RESOLVED, plus re-open detection
         if ticket_id:
             try:
-                from app.services.agents.ticket_intelligence_agent import get_ticket_intelligence_agent
+                from app.services.agents.ticket_status_agent import get_ticket_status_agent
                 from app.services.ticket_service import TicketService
                 from app.models.ticket import TicketUpdate, TicketStatus
                 
-                ticket_agent = get_ticket_intelligence_agent()
+                status_agent = get_ticket_status_agent()
                 
-                # Check if issue is resolved
-                resolution = ticket_agent.detect_resolution(
-                    conversation_history=conversation_history
-                )
-                
-                if resolution['is_resolved'] and resolution['confidence'] >= 7:
-                    ticket_update = TicketUpdate(
-                        status=TicketStatus.RESOLVED,
-                        resolution_notes=resolution['resolution_summary']
-                    )
-                    TicketService.update_ticket(db, ticket_id, ticket_update)
+                # Get current ticket
+                current_ticket = TicketService.get_ticket(db, ticket_id)
+                if current_ticket:
+                    current_status = current_ticket.status.value
                     
-                    logger.info(f"[TICKET] Auto-resolved #{ticket_id} (confidence: {resolution['confidence']}/10)")
-                    chat_logger.info(f"TICKET: Resolved #{ticket_id}")
-                    chat_logger.info(f"  Confidence: {resolution['confidence']}/10")
-                    chat_logger.info(f"  Solution: {resolution['resolution_summary']}")
+                    # Analyze conversation to determine appropriate status
+                    status_decision = status_agent.analyze_conversation_status(
+                        conversation_history=conversation_history,
+                        current_status=current_status,
+                        ticket_created_at=current_ticket.created_at,
+                        llm_resolved_flag=response['is_resolved']
+                    )
+                    
+                    chat_logger.info(f"STATUS-AGENT: Current={current_status}, Recommended={status_decision['recommended_status']}")
+                    chat_logger.info(f"  Should Update: {status_decision['should_update']}")
+                    chat_logger.info(f"  Confidence: {status_decision['confidence']}/10")
+                    chat_logger.info(f"  Reason: {status_decision['reason']}")
+                    
+                    # Update status if needed
+                    if status_decision['should_update']:
+                        # Map status string to enum
+                        status_map = {
+                            'open': TicketStatus.OPEN,
+                            'in_progress': TicketStatus.IN_PROGRESS,
+                            'resolved': TicketStatus.RESOLVED,
+                            'closed': TicketStatus.CLOSED
+                        }
+                        new_status = status_map.get(status_decision['recommended_status'])
+                        
+                        if new_status and new_status != current_ticket.status:
+                            ticket_update = TicketUpdate(
+                                status=new_status,
+                                resolution_notes=status_decision['resolution_summary'] if status_decision['resolution_summary'] else None
+                            )
+                            TicketService.update_ticket(db, ticket_id, ticket_update)
+                            
+                            logger.info(f"[STATUS] Ticket #{ticket_id}: {current_status} -> {new_status.value} ({status_decision['reason']})")
+                            chat_logger.info(f"TICKET STATUS CHANGED: #{ticket_id}")
+                            chat_logger.info(f"  From: {current_status}")
+                            chat_logger.info(f"  To: {new_status.value}")
+                            chat_logger.info(f"  Transition: {status_decision['transition']}")
+                            chat_logger.info(f"  Reason: {status_decision['reason']}")
+                    
+                    # Check for SLA warning
+                    if status_decision['sla_warning']:
+                        logger.warning(f"[SLA] Ticket #{ticket_id} approaching SLA breach!")
+                        chat_logger.info(f"SLA WARNING: Ticket #{ticket_id} may breach SLA")
+                    
+                    # Check for escalation needs
+                    if status_decision['needs_escalation']:
+                        logger.warning(f"[ESCALATION] Ticket #{ticket_id} user showing frustration signals")
+                        chat_logger.info(f"ESCALATION NEEDED: Ticket #{ticket_id} - user frustrated")
+                        
             except Exception as e:
-                logger.error(f"[TICKET] Error resolving: {e}", exc_info=True)
+                logger.error(f"[STATUS] Error in status management: {e}", exc_info=True)
         
         # Step 5: Return response
         return ChatResponse(

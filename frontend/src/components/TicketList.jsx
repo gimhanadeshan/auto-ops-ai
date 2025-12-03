@@ -10,6 +10,13 @@ function TicketList() {
 
   useEffect(() => {
     fetchTickets()
+    
+    // Auto-refresh tickets every 5 seconds to show priority changes
+    const interval = setInterval(() => {
+      fetchTickets()
+    }, 5000)
+    
+    return () => clearInterval(interval)
   }, [])
 
   const fetchTickets = async () => {
@@ -28,6 +35,11 @@ function TicketList() {
   }
 
   const getPriorityClass = (priority) => {
+    // Backend returns string values: "critical", "high", "medium", "low"
+    if (typeof priority === 'string') {
+      return priority.toLowerCase()
+    }
+    // Fallback for numeric values
     const priorityMap = {
       1: 'critical',
       2: 'high', 
@@ -38,6 +50,11 @@ function TicketList() {
   }
 
   const getPriorityLabel = (priority) => {
+    // Backend returns string values: "critical", "high", "medium", "low"
+    if (typeof priority === 'string') {
+      return priority.charAt(0).toUpperCase() + priority.slice(1)
+    }
+    // Fallback for numeric values
     const labels = {
       1: 'Critical',
       2: 'High',
@@ -45,6 +62,10 @@ function TicketList() {
       4: 'Low'
     }
     return labels[priority] || 'Medium'
+  }
+
+  const isCriticalPriority = (priority) => {
+    return priority === 'critical' || priority === 1
   }
 
   const getStatusBadge = (status) => {
@@ -75,7 +96,7 @@ function TicketList() {
   const filteredTickets = tickets.filter(ticket => {
     if (filter === 'all') return true
     if (filter === 'open') return ticket.status === 'open'
-    if (filter === 'critical') return ticket.priority === 1
+    if (filter === 'critical') return isCriticalPriority(ticket.priority)
     return true
   })
 
@@ -131,7 +152,7 @@ function TicketList() {
           className={`filter-tab ${filter === 'critical' ? 'active' : ''}`}
           onClick={() => setFilter('critical')}
         >
-          Critical ({tickets.filter(t => t.priority === 1).length})
+          Critical ({tickets.filter(t => isCriticalPriority(t.priority)).length})
         </button>
       </div>
 

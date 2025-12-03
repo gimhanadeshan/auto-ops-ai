@@ -405,9 +405,14 @@ class TicketIntelligenceAgent:
         
         # Positive resolution signals
         resolved_keywords = [
-            'fixed', 'working now', 'solved', 'resolved', 'perfect', 
-            'that worked', 'thank you', 'thanks it', 'great that helped',
-            'working perfectly', 'all good', 'problem solved'
+            'fixed', 'it is fixed', 'now it is fixed', 'its fixed',
+            'working now', 'works now', 'working again',
+            'solved', 'resolved', 'perfect', 
+            'that worked', 'it worked', 'that did it',
+            'thank you', 'thanks it', 'thanks that', 'great that helped',
+            'working perfectly', 'all good', 'problem solved',
+            'good now', 'fine now', 'ok now', 'okay now',
+            'no problem now', 'no issues now', 'sorted'
         ]
         
         # Negative signals (not resolved)
