@@ -45,28 +45,19 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 30
     
     # CORS
-    allowed_origins: List[str] = ["http://localhost:3000", "http://localhost:3001", "http://localhost:8000", "http://localhost:5173"]
+    allowed_origins: str = "http://localhost:3000,http://localhost:3001,http://localhost:8000,http://localhost:5173"
     
     # Logging
     log_level: str = "INFO"
+
+    # Conversation behavior
+    conversation_llm_first: bool = True
     
-    @field_validator("allowed_origins", mode="before")
-    @classmethod
-    def parse_allowed_origins(cls, v):
-        """Parse ALLOWED_ORIGINS which may be provided as:
-        - a Python/JSON-like list string: ["http://...","http://..."]
-        - a comma-separated string: http://...,http://...
-        - an actual list (passed in programmatically)
-        """
-        if isinstance(v, str):
-            s = v.strip()
-            # strip surrounding brackets if present
-            if s.startswith("[") and s.endswith("]"):
-                s = s[1:-1]
-            # remove any surrounding quotes from each item and split by comma
-            parts = [p.strip().strip("'\"") for p in s.split(",") if p.strip()]
-            return parts
-        return v
+    def get_allowed_origins_list(self) -> List[str]:
+        """Convert the comma-separated string to a list."""
+        if isinstance(self.allowed_origins, list):
+            return self.allowed_origins
+        return [origin.strip() for origin in self.allowed_origins.split(",") if origin.strip()]
     
     class Config:
         env_file = ".env"

@@ -37,17 +37,6 @@ async def lifespan(app: FastAPI):
         logger.error(f"Failed to initialize database: {e}")
         raise
     
-    # Initialize knowledge base
-    logger.info("Initializing knowledge base...")
-    try:
-        # Import the RAG initializer lazily to avoid hard dependency on
-        # optional packages (e.g. chromadb) during application import.
-        from app.services.rag_engine import initialize_knowledge_base
-        initialize_knowledge_base()
-    except Exception as e:
-        logger.warning(f"Could not initialize knowledge base: {e}")
-        logger.info("You can initialize it later by loading ticketing data.")
-    
     logger.info("Auto-Ops-AI Backend is ready!")
     
     yield
@@ -67,7 +56,7 @@ app = FastAPI(
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.allowed_origins,
+    allow_origins=settings.get_allowed_origins_list(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -108,14 +97,23 @@ except Exception as e:
     logger.warning(f"Could not include status endpoint at startup: {e}")
 
 # Import other endpoints individually so optional heavy dependencies don't break startup
-for _name, _tag in (("chat", "Chat"), ("tickets", "Tickets"), ("dashboard", "Dashboard")):
+# Use chat_enhanced (LLM-First with intelligent RAG) for the main chat
+for _name, _tag in (("auth", "Authentication"), ("chat_enhanced", "Chat"), ("tickets", "Tickets"), ("dashboard", "Dashboard"), ("monitoring", "Monitoring")):
     try:
         mod = importlib.import_module(f"app.api.endpoints.{_name}")
-        app.include_router(
-            mod.router,
-            prefix=f"{settings.api_prefix}",
-            tags=[_tag]
-        )
+        # Monitoring endpoint gets its own prefix path
+        if _name == "monitoring":
+            app.include_router(
+                mod.router,
+                prefix=f"{settings.api_prefix}/monitoring",
+                tags=[_tag]
+            )
+        else:
+            app.include_router(
+                mod.router,
+                prefix=f"{settings.api_prefix}",
+                tags=[_tag]
+            )
     except Exception as e:
         logger.warning(f"Could not include {_name} endpoint at startup: {e}")
 
