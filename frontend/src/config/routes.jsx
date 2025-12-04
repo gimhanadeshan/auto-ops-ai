@@ -5,6 +5,7 @@ import SystemMonitoring from '../components/SystemMonitoring'
 import Reports from '../components/Reports'
 import Settings from '../components/Settings'
 import AutomationPage from '../components/AutomationPage'
+import ErrorCodesPage from '../components/ErrorCodesPage'
 import KnowledgeBasePage from '../components/KnowledgeBasePage'
 import Login from '../components/Login'
 import Register from '../components/Register'
@@ -40,6 +41,11 @@ export const getAuthenticatedRoutes = (ChatPage) => [
   {
     path: ROUTES.AUTOMATION,
     element: AutomationPage,
+    requiresAuth: true
+  },
+  {
+    path: ROUTES.ERROR_CODES,
+    element: ErrorCodesPage,
     requiresAuth: true
   },
   {

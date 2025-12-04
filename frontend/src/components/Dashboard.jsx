@@ -252,7 +252,7 @@ function Dashboard({ user }) {
       </div>
 
       <div className="quick-actions-panel">
-        <h2>Quick Actions</h2>
+        <h2>Quick Navigation</h2>
         <div className="actions-grid">
           <Link to="/chat" className="action-card">
             <MessageSquare size={28} />
