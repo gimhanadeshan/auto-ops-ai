@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom'
 import { fetchBackendStatus, sendChatMessage, resetChatConversation } from './api'
-import { Bot, User, Send, FileText, AlertCircle, Zap, Wrench, HelpCircle } from 'lucide-react'
+import { Bot, User, Send, FileText, AlertCircle, Zap, Wrench, HelpCircle, Mic, MicOff } from 'lucide-react'
 import { STORAGE_KEYS } from './config/constants'
+import { voiceService } from './services/voiceService'
 import Sidebar from './components/Sidebar'
 import Dashboard from './components/Dashboard'
 import TicketList from './components/TicketList'
@@ -10,6 +11,8 @@ import SystemMonitoring from './components/SystemMonitoring'
 import Reports from './components/Reports'
 import Settings from './components/Settings'
 import AutomationPage from './components/AutomationPage'
+import ErrorCodesPage from './components/ErrorCodesPage'
+import QuickActionsPage from './components/QuickActionsPage'
 import KnowledgeBasePage from './components/KnowledgeBasePage'
 import Login from './components/Login'
 import Register from './components/Register'
@@ -27,7 +30,11 @@ function ChatPage({ user }) {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [currentTicket, setCurrentTicket] = useState(null)
+  const [isListening, setIsListening] = useState(false)
+  const [voiceSupported, setVoiceSupported] = useState(false)
+  const [interimTranscript, setInterimTranscript] = useState('')
   const messagesEndRef = useRef(null)
+  const interimTranscriptRef = useRef('')
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -42,12 +49,63 @@ function ChatPage({ user }) {
       .then(data => setBackendStatus(data))
       .catch(err => console.error('Backend status check failed:', err))
     
-    // Reset conversation on the backend when chat page loads
-    // This ensures a fresh start when user refreshes or navigates to chat
-    if (user?.email) {
-      resetChatConversation(user.email)
-        .then(() => console.log('Conversation reset for fresh start'))
-        .catch(err => console.warn('Could not reset conversation:', err))
+    // Don't auto-reset conversation - allow continuing previous chats
+    // User can start new chat via "New Chat" button if needed
+
+    // Initialize voice service
+    setVoiceSupported(voiceService.checkSupport())
+    
+    // Set up voice recognition callbacks
+    voiceService.onResult((result) => {
+      if (result.final) {
+        // Final transcript - set it in input field
+        setInput(result.final)
+        setInterimTranscript('')
+        interimTranscriptRef.current = ''
+        setIsListening(false)
+      } else {
+        // Interim transcript - show it temporarily
+        setInterimTranscript(result.interim)
+        interimTranscriptRef.current = result.interim
+      }
+    })
+
+    voiceService.onError((error) => {
+      setIsListening(false)
+      setInterimTranscript('')
+      interimTranscriptRef.current = ''
+      // Show error message to user
+      const errorMessage = {
+        role: 'assistant',
+        content: `Voice input error: ${error}`,
+        timestamp: new Date().toISOString(),
+        isError: true
+      }
+      setMessages(prev => [...prev, errorMessage])
+    })
+
+    voiceService.onStart(() => {
+      setIsListening(true)
+      setInterimTranscript('Listening...')
+      interimTranscriptRef.current = 'Listening...'
+    })
+
+    voiceService.onEnd(() => {
+      setIsListening(false)
+      const currentInterim = interimTranscriptRef.current
+      if (currentInterim && !currentInterim.includes('Listening')) {
+        // Keep the interim transcript if it's actual speech
+        setInput(prev => prev + (prev ? ' ' : '') + currentInterim)
+      }
+      setInterimTranscript('')
+      interimTranscriptRef.current = ''
+    })
+
+    // Cleanup on unmount
+    return () => {
+      if (voiceService.getListeningState()) {
+        voiceService.stopListening()
+      }
     }
   }, [user?.email])
 
@@ -103,6 +161,43 @@ function ChatPage({ user }) {
     }
   }
 
+  const handleVoiceToggle = () => {
+    if (isListening) {
+      voiceService.stopListening()
+    } else {
+      try {
+        voiceService.startListening()
+      } catch (error) {
+        console.error('Error starting voice input:', error)
+        const errorMessage = {
+          role: 'assistant',
+          content: `Unable to start voice input: ${error.message}. Please check your microphone permissions.`,
+          timestamp: new Date().toISOString(),
+          isError: true
+        }
+        setMessages(prev => [...prev, errorMessage])
+      }
+    }
+  }
+
+  const handleNewChat = () => {
+    // Reset to new chat
+    setMessages([
+      { 
+        role: 'assistant', 
+        content: `Hi ${user?.name || 'there'}! I'm your AI IT Support Assistant. How can I help you today?`,
+        timestamp: new Date().toISOString()
+      }
+    ])
+    setCurrentTicket(null)
+    
+    // Reset backend conversation
+    if (user?.email) {
+      resetChatConversation(user.email)
+        .catch(err => console.warn('Could not reset conversation:', err))
+    }
+  }
+
   const formatTimestamp = (timestamp) => {
     return new Date(timestamp).toLocaleTimeString('en-US', { 
       hour: '2-digit', 
@@ -122,6 +217,15 @@ function ChatPage({ user }) {
               {backendStatus ? 'Online' : 'Offline'}
             </span>
           </div>
+        </div>
+        <div className="chat-header-right">
+          <button
+            onClick={handleNewChat}
+            className="new-chat-btn"
+            title="Start new chat"
+          >
+            New Chat
+          </button>
         </div>
       </div>
 
@@ -181,19 +285,35 @@ function ChatPage({ user }) {
       </div>
 
       <div className="chat-input-area">
+        {isListening && (
+          <div className="voice-listening-indicator">
+            <div className="voice-pulse"></div>
+            <span>{interimTranscript || 'Listening... Speak now'}</span>
+          </div>
+        )}
         <div className="input-section">
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder="Describe your IT issue... (e.g., 'My laptop is slow')"
+            placeholder={isListening ? "Listening..." : "Describe your IT issue... (e.g., 'My laptop is slow')"}
             className="message-input"
             rows={2}
-            disabled={loading}
+            disabled={loading || isListening}
           />
+          {voiceSupported && (
+            <button
+              onClick={handleVoiceToggle}
+              disabled={loading}
+              className={`voice-btn ${isListening ? 'listening' : ''}`}
+              title={isListening ? 'Stop listening' : 'Start voice input'}
+            >
+              {isListening ? <MicOff size={20} /> : <Mic size={20} />}
+            </button>
+          )}
           <button 
             onClick={handleSend} 
-            disabled={loading || !input.trim()}
+            disabled={loading || !input.trim() || isListening}
             className="send-btn"
           >
             <Send size={18} />
@@ -201,7 +321,13 @@ function ChatPage({ user }) {
           </button>
         </div>
         <div className="input-hint">
-          Press Enter to send, Shift+Enter for new line
+          {voiceSupported ? (
+            <>
+              Press Enter to send, Shift+Enter for new line • Click <Mic size={14} style={{ display: 'inline', verticalAlign: 'middle' }} /> to use voice input
+            </>
+          ) : (
+            'Press Enter to send, Shift+Enter for new line'
+          )}
         </div>
       </div>
     </div>
@@ -215,11 +341,13 @@ function MainLayout({ user, onLogout }) {
       <div className="main-content">
         <Routes>
           <Route path="/dashboard" element={<Dashboard user={user} />} />
+          <Route path="/quick-actions" element={<QuickActionsPage />} />
           <Route path="/chat" element={<ChatPage user={user} />} />
           <Route path="/tickets" element={<TicketList />} />
           <Route path="/monitoring" element={<SystemMonitoring />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/automation" element={<AutomationPage />} />
+          <Route path="/error-codes" element={<ErrorCodesPage />} />
           <Route path="/knowledge-base" element={<KnowledgeBasePage />} />
           <Route path="/settings" element={<Settings user={user} />} />
           <Route path="/" element={<Navigate to="/dashboard" replace />} />

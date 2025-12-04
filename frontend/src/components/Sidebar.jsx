@@ -12,7 +12,9 @@ import {
   Shield,
   Bell,
   Database,
-  Zap
+  Zap,
+  AlertCircle,
+  Rocket
 } from 'lucide-react'
 import ThemeToggle from './ThemeToggle'
 import '../styles/components/Sidebar.css'
@@ -20,11 +22,13 @@ import '../styles/components/Sidebar.css'
 function Sidebar({ user, onLogout }) {
   const navItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+    { path: '/quick-actions', icon: Rocket, label: 'Quick Actions' },
     { path: '/chat', icon: MessageSquare, label: 'AI Support Chat' },
     { path: '/tickets', icon: FileText, label: 'Tickets' },
     { path: '/monitoring', icon: Activity, label: 'System Monitoring' },
     { path: '/reports', icon: BarChart3, label: 'Reports & Analytics' },
     { path: '/automation', icon: Zap, label: 'Automation Rules' },
+    { path: '/error-codes', icon: AlertCircle, label: 'Error Codes' },
     { path: '/knowledge-base', icon: Database, label: 'Knowledge Base' },
     { path: '/settings', icon: Settings, label: 'Settings' }
   ]

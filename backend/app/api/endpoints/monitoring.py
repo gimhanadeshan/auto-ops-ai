@@ -9,28 +9,63 @@ from app.core.database import get_db
 from app.services.ticket_service import ticket_service
 from app.models.ticket import TicketCreate
 from datetime import datetime
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import random
 
+# Try to import psutil for real system monitoring
 logger = logging.getLogger(__name__)
+
+# Try to import psutil at module load time
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+    logger.info("psutil available - real system monitoring enabled")
+except ImportError:
+    PSUTIL_AVAILABLE = False
+    logger.warning("psutil not available. System monitoring will use simulated data. Install with: pip install psutil")
+
+def check_psutil_available():
+    """Check if psutil is available (runtime check)."""
+    try:
+        import psutil
+        return True
+    except ImportError:
+        return False
+
 router = APIRouter()
 
+# Store current metrics to simulate gradual changes (like real monitoring)
+_current_metrics = {
+    "cpu_usage": 45.0,
+    "memory_usage": 62.0,
+    "disk_usage": 78.0,
+    "response_time": 1200.0
+}
 
 # Simulated system metrics (in production, these would come from real monitoring tools)
 def get_mock_system_metrics() -> List[Dict[str, Any]]:
     """
-    Simulate system health checks.
+    Simulate system health checks with gradual changes (more realistic).
     In production, this would integrate with:
     - Prometheus, Grafana, Datadog, etc.
     - Windows Performance Counters
     - Linux /proc filesystem
     - Cloud provider monitoring (AWS CloudWatch, Azure Monitor)
     """
+    global _current_metrics
+    
+    # Simulate gradual changes (like real monitoring systems)
+    # Each metric changes by a small random amount (±2-5%)
+    _current_metrics["cpu_usage"] = max(10, min(100, _current_metrics["cpu_usage"] + random.uniform(-3, 3)))
+    _current_metrics["memory_usage"] = max(20, min(100, _current_metrics["memory_usage"] + random.uniform(-2, 2)))
+    _current_metrics["disk_usage"] = max(50, min(100, _current_metrics["disk_usage"] + random.uniform(-1, 1)))
+    _current_metrics["response_time"] = max(200, min(5000, _current_metrics["response_time"] + random.uniform(-100, 100)))
+    
     return [
         {
             "service": "database_server",
             "metric": "cpu_usage",
-            "value": random.randint(60, 98),
+            "value": round(_current_metrics["cpu_usage"], 1),
             "threshold": 85,
             "unit": "percent",
             "severity_multiplier": 1.2
@@ -38,7 +73,7 @@ def get_mock_system_metrics() -> List[Dict[str, Any]]:
         {
             "service": "web_application",
             "metric": "memory_usage",
-            "value": random.randint(70, 95),
+            "value": round(_current_metrics["memory_usage"], 1),
             "threshold": 85,
             "unit": "percent",
             "severity_multiplier": 1.1
@@ -46,7 +81,7 @@ def get_mock_system_metrics() -> List[Dict[str, Any]]:
         {
             "service": "file_server",
             "metric": "disk_usage",
-            "value": random.randint(75, 98),
+            "value": round(_current_metrics["disk_usage"], 1),
             "threshold": 90,
             "unit": "percent",
             "severity_multiplier": 1.5
@@ -54,7 +89,7 @@ def get_mock_system_metrics() -> List[Dict[str, Any]]:
         {
             "service": "backup_service",
             "metric": "response_time",
-            "value": random.randint(500, 5000),
+            "value": round(_current_metrics["response_time"], 0),
             "threshold": 2000,
             "unit": "milliseconds",
             "severity_multiplier": 1.0
@@ -412,6 +447,208 @@ async def get_sample_system_logs():
             "cloud": "CloudWatch (AWS), Azure Monitor, GCP Logging",
             "apm_tools": "Datadog, New Relic, Prometheus, Grafana"
         }
+    }
+
+
+@router.get("/stats")
+async def get_real_system_stats():
+    """
+    Get real system statistics using psutil (Task Manager data).
+    
+    Simple implementation - just CPU, RAM, and Disk usage percentages.
+    
+    Returns:
+        Real system metrics: CPU %, RAM %, Disk %
+    """
+    # Check psutil availability at runtime
+    if not check_psutil_available():
+        raise HTTPException(
+            status_code=503,
+            detail="psutil not available. Please install psutil: python -m pip install psutil==5.9.8"
+        )
+    
+    # Import psutil and platform
+    import psutil
+    import platform
+    
+    try:
+        # CPU % - use interval=1 for accurate reading
+        cpu = psutil.cpu_percent(interval=1)
+        
+        # RAM % (cross-platform)
+        memory = psutil.virtual_memory()
+        ram = memory.percent
+        
+        # Get disk usage percentage
+        if platform.system() == 'Windows':
+            disk_usage = psutil.disk_usage('C:\\')
+        else:
+            disk_usage = psutil.disk_usage('/')
+        
+        # Calculate network activity percentage (simplified)
+        network_io = psutil.net_io_counters()
+        network_percent = 0
+        if network_io:
+            total_bytes = network_io.bytes_sent + network_io.bytes_recv
+            network_percent = min(100, (total_bytes % 1000000000) / 10000000)
+        
+        return {
+            "cpu": round(cpu, 1),
+            "ram": round(ram, 1),
+            "disk": round(disk_usage.percent, 1),
+            "network": round(network_percent, 1),
+            "timestamp": datetime.utcnow().isoformat(),
+            "source": "psutil",
+            "details": {
+                "cpu_cores": psutil.cpu_count(),
+                "memory_total_gb": round(memory.total / (1024**3), 2),
+                "memory_used_gb": round(memory.used / (1024**3), 2),
+                "memory_available_gb": round(memory.available / (1024**3), 2),
+                "disk_total_gb": round(disk_usage.total / (1024**3), 2),
+                "disk_used_gb": round(disk_usage.used / (1024**3), 2),
+                "disk_free_gb": round(disk_usage.free / (1024**3), 2)
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error getting system stats with psutil: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve system statistics: {str(e)}"
+        )
+
+
+@router.get("/metrics")
+async def get_system_metrics():
+    """
+    Get current system metrics for real-time monitoring display.
+    
+    Tries to use real psutil data first, falls back to simulated data if unavailable.
+    
+    Returns:
+        Current system metrics including CPU, Memory, Disk, and Network usage
+    """
+    logger.info("Fetching system metrics for monitoring dashboard...")
+    
+    # Try to get real system stats first (check at runtime)
+    if check_psutil_available():
+        try:
+            real_stats = await get_real_system_stats()
+            # Convert to the format expected by frontend
+            metrics = {
+                "cpu": real_stats["cpu"],
+                "memory": real_stats["ram"],
+                "disk": real_stats["disk"],
+                "network": real_stats["network"]
+            }
+            
+            # Create checks array for logs
+            all_checks = [
+                {
+                    "service": "system",
+                    "metric": "cpu_usage",
+                    "value": metrics["cpu"],
+                    "threshold": 85,
+                    "unit": "percent",
+                    "status": "healthy" if metrics["cpu"] <= 85 else "unhealthy",
+                    "severity": "critical" if metrics["cpu"] > 85 * 1.2 else 
+                               "high" if metrics["cpu"] > 85 * 1.1 else
+                               "medium" if metrics["cpu"] > 85 else "normal"
+                },
+                {
+                    "service": "system",
+                    "metric": "memory_usage",
+                    "value": metrics["memory"],
+                    "threshold": 85,
+                    "unit": "percent",
+                    "status": "healthy" if metrics["memory"] <= 85 else "unhealthy",
+                    "severity": "critical" if metrics["memory"] > 85 * 1.2 else 
+                               "high" if metrics["memory"] > 85 * 1.1 else
+                               "medium" if metrics["memory"] > 85 else "normal"
+                },
+                {
+                    "service": "system",
+                    "metric": "disk_usage",
+                    "value": metrics["disk"],
+                    "threshold": 90,
+                    "unit": "percent",
+                    "status": "healthy" if metrics["disk"] <= 90 else "unhealthy",
+                    "severity": "critical" if metrics["disk"] > 90 * 1.2 else 
+                               "high" if metrics["disk"] > 90 * 1.1 else
+                               "medium" if metrics["disk"] > 90 else "normal"
+                }
+            ]
+            
+            return {
+                "timestamp": datetime.utcnow().isoformat(),
+                "metrics": metrics,
+                "checks": all_checks,
+                "status": "active",
+                "source": "psutil",
+                "real_data": True
+            }
+        except Exception as e:
+            logger.warning(f"Failed to get real system stats, using simulated: {e}")
+            # Fall through to simulated data
+    
+    # Fallback to simulated data
+    system_checks = get_mock_system_metrics()
+    
+    # Extract metrics by type - use the actual values from checks
+    metrics = {
+        "cpu": 0,
+        "memory": 0,
+        "disk": 0,
+        "network": 0
+    }
+    
+    # Map service metrics to display metrics
+    for check in system_checks:
+        metric_name = check["metric"]
+        value = check["value"]
+        
+        if metric_name == "cpu_usage":
+            metrics["cpu"] = value
+        elif metric_name == "memory_usage":
+            metrics["memory"] = value
+        elif metric_name == "disk_usage":
+            metrics["disk"] = value
+        elif metric_name == "response_time":
+            # Convert response time to network activity percentage
+            # Normalize: 0-2000ms = 0-50%, 2000-5000ms = 50-100%
+            normalized = min(100, max(0, ((value - 500) / 4500) * 100))
+            metrics["network"] = normalized
+    
+    # Get all checks with their status for logs
+    all_checks = []
+    for check in system_checks:
+        is_healthy = check["value"] <= check["threshold"]
+        severity = "normal"
+        if not is_healthy:
+            severity_ratio = check["value"] / check["threshold"]
+            if severity_ratio > 1.2:
+                severity = "critical"
+            elif severity_ratio > 1.1:
+                severity = "high"
+            else:
+                severity = "medium"
+        
+        all_checks.append({
+            "service": check["service"],
+            "metric": check["metric"],
+            "value": check["value"],
+            "threshold": check["threshold"],
+            "unit": check["unit"],
+            "status": "healthy" if is_healthy else "unhealthy",
+            "severity": severity
+        })
+    
+    return {
+        "timestamp": datetime.utcnow().isoformat(),
+        "metrics": metrics,
+        "checks": all_checks,
+        "status": "active",
+        "source": "simulated",
+        "real_data": False
     }
 
 
