@@ -163,6 +163,11 @@
   transform: translateY(-2px);
 }
 
+.logout-btn:focus,
+.logout-btn:active {
+  outline: none;
+}
+
 /* Scrollbar styling */
 .sidebar-nav::-webkit-scrollbar {
   width: 6px;
