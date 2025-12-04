@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, RefreshCw, AlertCircle, Zap, CheckCircle, Clock, XCircle, Loader, Plus, X, Edit2, Trash2 } from 'lucide-react'
+import { ArrowLeft, RefreshCw, AlertCircle, Zap, CheckCircle, Clock, XCircle, Loader, Plus, X, Edit2, Trash2, Search, Filter, LayoutGrid, List, Table, User, Calendar, Tag, MessageSquare } from 'lucide-react'
 import { ticketService } from '../services/ticketService'
 import { 
   TICKET_PRIORITY, 
@@ -39,12 +39,16 @@ function TicketList() {
   const [creating, setCreating] = useState(false)
   const [updating, setUpdating] = useState(false)
   const [editingTicket, setEditingTicket] = useState(null)
+  const [viewMode, setViewMode] = useState('board') // 'board', 'list', 'table'
+  const [searchQuery, setSearchQuery] = useState('')
+  const [draggedTicket, setDraggedTicket] = useState(null)
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     priority: TICKET_PRIORITY.MEDIUM,
     category: TICKET_CATEGORY.OTHER,
-    user_email: getUserEmail()
+    user_email: getUserEmail(),
+    assignee: ''
   })
 
   useEffect(() => {
@@ -208,15 +212,56 @@ function TicketList() {
     }
   }
 
+  const handleDragStart = (e, ticket) => {
+    setDraggedTicket(ticket)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleDragOver = (e) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+  }
+
+  const handleDrop = async (e, newStatus) => {
+    e.preventDefault()
+    if (!draggedTicket) return
+
+    try {
+      const ticketData = {
+        title: draggedTicket.title,
+        description: draggedTicket.description,
+        priority: draggedTicket.priority,
+        category: draggedTicket.category,
+        status: newStatus,
+        user_email: draggedTicket.user_email
+      }
+      await ticketService.update(draggedTicket.id, ticketData)
+      await fetchTickets()
+      setDraggedTicket(null)
+    } catch (err) {
+      alert('Error updating ticket status: ' + err.message)
+    }
+  }
+
   const filteredTickets = tickets.filter(ticket => {
-    if (filter === 'all') return true
-    if (filter === 'open') return ticket.status === 'open'
-    if (filter === 'in_progress') return ticket.status === 'in_progress'
-    if (filter === 'assigned_to_human') return ticket.status === 'assigned_to_human'
-    if (filter === 'resolved') return ticket.status === 'resolved'
-    if (filter === 'closed') return ticket.status === 'closed'
-    if (filter === 'critical') return ticket.priority === 'critical' || ticket.priority === 1
-    return true
+    // Filter by status
+    let statusMatch = true
+    if (filter === 'all') statusMatch = true
+    else if (filter === 'open') statusMatch = ticket.status === 'open'
+    else if (filter === 'in_progress') statusMatch = ticket.status === 'in_progress'
+    else if (filter === 'assigned_to_human') statusMatch = ticket.status === 'assigned_to_human'
+    else if (filter === 'resolved') statusMatch = ticket.status === 'resolved'
+    else if (filter === 'closed') statusMatch = ticket.status === 'closed'
+    else if (filter === 'critical') statusMatch = ticket.priority === 'critical' || ticket.priority === 1
+
+    // Filter by search query
+    const searchMatch = searchQuery === '' || 
+      ticket.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      ticket.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      ticket.user_email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      ticket.id.toString().includes(searchQuery)
+
+    return statusMatch && searchMatch
   })
 
   if (loading) {
@@ -245,141 +290,310 @@ function TicketList() {
     )
   }
 
-  return (
-    <div className="ticket-list-container">
-      <div className="ticket-header">
-        <div className="header-left">
-          <h1>Support Tickets</h1>
-        </div>
-        <div className="header-actions">
-          <button onClick={() => setShowCreateModal(true)} className="create-ticket-btn">
-            <Plus size={18} />
-            <span>Create Ticket</span>
-          </button>
-          <button onClick={fetchTickets} className="refresh-btn">
-            <RefreshCw size={18} />
-            <span>Refresh</span>
-          </button>
-        </div>
-      </div>
+  // Board view render
+  const renderBoardView = () => {
+    const columns = [
+      { status: 'open', title: 'Open', icon: <AlertCircle size={16} /> },
+      { status: 'in_progress', title: 'In Progress', icon: <Clock size={16} /> },
+      { status: 'assigned_to_human', title: 'Assigned', icon: <User size={16} /> },
+      { status: 'resolved', title: 'Resolved', icon: <CheckCircle size={16} /> },
+      { status: 'closed', title: 'Closed', icon: <XCircle size={16} /> }
+    ]
 
-      <div className="filter-tabs">
-        <button 
-          className={`filter-tab ${filter === 'all' ? 'active' : ''}`}
-          onClick={() => setFilter('all')}
-        >
-          All ({tickets.length})
-        </button>
-        <button 
-          className={`filter-tab ${filter === 'open' ? 'active' : ''}`}
-          onClick={() => setFilter('open')}
-        >
-          Open ({tickets.filter(t => t.status === 'open').length})
-        </button>
-        <button 
-          className={`filter-tab ${filter === 'in_progress' ? 'active' : ''}`}
-          onClick={() => setFilter('in_progress')}
-        >
-          In Progress ({tickets.filter(t => t.status === 'in_progress').length})
-        </button>
-        <button 
-          className={`filter-tab ${filter === 'assigned_to_human' ? 'active' : ''}`}
-          onClick={() => setFilter('assigned_to_human')}
-        >
-          Assigned ({tickets.filter(t => t.status === 'assigned_to_human').length})
-        </button>
-        <button 
-          className={`filter-tab ${filter === 'resolved' ? 'active' : ''}`}
-          onClick={() => setFilter('resolved')}
-        >
-          Resolved ({tickets.filter(t => t.status === 'resolved').length})
-        </button>
-        <button 
-          className={`filter-tab ${filter === 'closed' ? 'active' : ''}`}
-          onClick={() => setFilter('closed')}
-        >
-          Closed ({tickets.filter(t => t.status === 'closed').length})
-        </button>
-        <button 
-          className={`filter-tab ${filter === 'critical' ? 'active' : ''}`}
-          onClick={() => setFilter('critical')}
-        >
-          Critical ({tickets.filter(t => t.priority === 'critical' || t.priority === 1).length})
-        </button>
+    return (
+      <div className="jira-board">
+        {columns.map(column => {
+          const columnTickets = filteredTickets.filter(t => t.status === column.status)
+          return (
+            <div 
+              key={column.status} 
+              className="board-column"
+              onDragOver={handleDragOver}
+              onDrop={(e) => handleDrop(e, column.status)}
+            >
+              <div className="column-header">
+                {column.icon}
+                <span className="column-title">{column.title}</span>
+                <span className="column-count">{columnTickets.length}</span>
+              </div>
+              <div className="column-content">
+                {columnTickets.map(ticket => (
+                  <div
+                    key={ticket.id}
+                    className={`board-ticket priority-${getPriorityClass(ticket.priority)}`}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, ticket)}
+                  >
+                    <div className="board-ticket-header">
+                      <span className="ticket-key">#{ticket.id}</span>
+                      <span className={`priority-icon priority-${getPriorityClass(ticket.priority)}`}>
+                        <Zap size={14} />
+                      </span>
+                    </div>
+                    <h4 className="board-ticket-title">{ticket.title}</h4>
+                    <div className="board-ticket-footer">
+                      <div className="ticket-meta-small">
+                        <User size={12} />
+                        <span>{ticket.user_email.split('@')[0]}</span>
+                      </div>
+                      <div className="ticket-actions-compact">
+                        <button onClick={() => handleEditTicket(ticket)} className="icon-btn">
+                          <Edit2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {columnTickets.length === 0 && (
+                  <div className="empty-column">No tickets</div>
+                )}
+              </div>
+            </div>
+          )
+        })}
       </div>
+    )
+  }
 
-      {filteredTickets.length === 0 ? (
-        <div className="empty-state">
-          <XCircle className="empty-icon" size={64} />
-          <h3>No tickets found</h3>
-          <p>No tickets match the current filter</p>
-        </div>
-      ) : (
-        <div className="tickets-grid">
+  // List view render
+  const renderListView = () => (
+    <div className="jira-list">
+      {filteredTickets.map(ticket => {
+        const status = getStatusBadge(ticket.status)
+        const priorityClass = getPriorityClass(ticket.priority)
+        const priorityLabel = getPriorityLabel(ticket.priority)
+
+        return (
+          <div key={ticket.id} className="list-ticket">
+            <div className="list-ticket-main">
+              <div className="list-ticket-id">
+                <span className="ticket-key">#{ticket.id}</span>
+              </div>
+              <div className="list-ticket-content">
+                <h3 className="list-ticket-title">{ticket.title}</h3>
+                <p className="list-ticket-description">
+                  {ticket.description.length > 100 
+                    ? ticket.description.substring(0, 100) + '...'
+                    : ticket.description
+                  }
+                </p>
+              </div>
+              <div className="list-ticket-meta">
+                <span className={`badge ${status.class}`}>
+                  {status.label}
+                </span>
+                <span className={`badge priority-badge-${priorityClass}`}>
+                  <Zap size={12} />
+                  {priorityLabel}
+                </span>
+                {ticket.category && (
+                  <span className="badge category-badge">
+                    <Tag size={12} />
+                    {TICKET_CATEGORY_LABELS[ticket.category]}
+                  </span>
+                )}
+              </div>
+              <div className="list-ticket-info">
+                <div className="info-item">
+                  <User size={14} />
+                  <span>{ticket.user_email.split('@')[0]}</span>
+                </div>
+                <div className="info-item">
+                  <Calendar size={14} />
+                  <span>{formatDate(ticket.created_at)}</span>
+                </div>
+              </div>
+              <div className="list-ticket-actions">
+                <button onClick={() => handleEditTicket(ticket)} className="icon-btn">
+                  <Edit2 size={16} />
+                </button>
+                <button onClick={() => handleDeleteTicket(ticket.id)} className="icon-btn delete">
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+
+  // Table view render
+  const renderTableView = () => (
+    <div className="jira-table-container">
+      <table className="jira-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Title</th>
+            <th>Status</th>
+            <th>Priority</th>
+            <th>Category</th>
+            <th>Reporter</th>
+            <th>Created</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
           {filteredTickets.map(ticket => {
             const status = getStatusBadge(ticket.status)
             const priorityClass = getPriorityClass(ticket.priority)
             const priorityLabel = getPriorityLabel(ticket.priority)
 
             return (
-              <div key={ticket.id} className={`ticket-card priority-${priorityClass}`}>
-                <div className="ticket-card-header">
-                  <div className="ticket-id">#{ticket.id}</div>
-                  <div className="ticket-badges">
-                    <span className={`badge ${status.class}`}>
-                      {ticket.status === 'resolved' ? <CheckCircle size={12} /> :
-                       ticket.status === 'in_progress' ? <Clock size={12} /> :
-                       <AlertCircle size={12} />}
-                      <span>{status.label}</span>
-                    </span>
-                    <span className={`badge priority-badge-${priorityClass}`}>
-                      <Zap size={12} />
-                      <span>{priorityLabel}</span>
-                    </span>
+              <tr key={ticket.id} className="table-row">
+                <td className="table-id">#{ticket.id}</td>
+                <td className="table-title">
+                  <div className="title-cell">
+                    <span>{ticket.title}</span>
                   </div>
-                </div>
-
-                <div className="ticket-card-body">
-                  <h3 className="ticket-title">{ticket.title}</h3>
-                  <p className="ticket-description">
-                    {ticket.description.length > 150 
-                      ? ticket.description.substring(0, 150) + '...'
-                      : ticket.description
-                    }
-                  </p>
-                </div>
-
-                <div className="ticket-card-footer">
-                  <div className="ticket-meta">
-                    <span className="ticket-user">{ticket.user_email.split('@')[0]}</span>
-                    <span className="ticket-time">{formatDate(ticket.created_at)}</span>
+                </td>
+                <td>
+                  <span className={`badge ${status.class}`}>
+                    {status.label}
+                  </span>
+                </td>
+                <td>
+                  <span className={`badge priority-badge-${priorityClass}`}>
+                    <Zap size={12} />
+                    {priorityLabel}
+                  </span>
+                </td>
+                <td>
+                  {ticket.category && (
+                    <span className="badge category-badge">
+                      {TICKET_CATEGORY_LABELS[ticket.category]}
+                    </span>
+                  )}
+                </td>
+                <td>
+                  <div className="user-cell">
+                    <User size={14} />
+                    <span>{ticket.user_email.split('@')[0]}</span>
                   </div>
-                  <div className="ticket-actions">
-                    {ticket.category && (
-                      <span className="ticket-category">
-                        {TICKET_CATEGORY_LABELS[ticket.category] || ticket.category}
-                      </span>
-                    )}
-                    <button 
-                      className="ticket-action-btn edit-btn"
-                      onClick={() => handleEditTicket(ticket)}
-                      title="Edit ticket"
-                    >
-                      <Edit2 size={16} />
+                </td>
+                <td>{formatDate(ticket.created_at)}</td>
+                <td>
+                  <div className="table-actions">
+                    <button onClick={() => handleEditTicket(ticket)} className="icon-btn">
+                      <Edit2 size={14} />
                     </button>
-                    <button 
-                      className="ticket-action-btn delete-btn"
-                      onClick={() => handleDeleteTicket(ticket.id)}
-                      title="Delete ticket"
-                    >
-                      <Trash2 size={16} />
+                    <button onClick={() => handleDeleteTicket(ticket.id)} className="icon-btn delete">
+                      <Trash2 size={14} />
                     </button>
                   </div>
-                </div>
-              </div>
+                </td>
+              </tr>
             )
           })}
+        </tbody>
+      </table>
+    </div>
+  )
+
+  return (
+    <div className="ticket-list-container jira-style">
+      {/* Jira-style Header */}
+      <div className="jira-header">
+        <div className="jira-header-left">
+          <h1>Issues</h1>
+          <div className="header-stats">
+            <span className="stat-item">
+              {filteredTickets.length} issues
+            </span>
+          </div>
         </div>
+        <div className="jira-header-right">
+          <button onClick={() => setShowCreateModal(true)} className="btn-primary">
+            <Plus size={18} />
+            <span>Create</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Toolbar */}
+      <div className="jira-toolbar">
+        <div className="toolbar-left">
+          <div className="search-box">
+            <Search size={18} />
+            <input
+              type="text"
+              placeholder="Search issues..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+          <div className="filter-group">
+            <button 
+              className={`filter-btn ${filter === 'all' ? 'active' : ''}`}
+              onClick={() => setFilter('all')}
+            >
+              All
+            </button>
+            <button 
+              className={`filter-btn ${filter === 'open' ? 'active' : ''}`}
+              onClick={() => setFilter('open')}
+            >
+              Open
+            </button>
+            <button 
+              className={`filter-btn ${filter === 'in_progress' ? 'active' : ''}`}
+              onClick={() => setFilter('in_progress')}
+            >
+              In Progress
+            </button>
+            <button 
+              className={`filter-btn ${filter === 'critical' ? 'active' : ''}`}
+              onClick={() => setFilter('critical')}
+            >
+              <Zap size={14} />
+              Critical
+            </button>
+          </div>
+        </div>
+        <div className="toolbar-right">
+          <div className="view-switcher">
+            <button 
+              className={`view-btn ${viewMode === 'board' ? 'active' : ''}`}
+              onClick={() => setViewMode('board')}
+              title="Board view"
+            >
+              <LayoutGrid size={18} />
+            </button>
+            <button 
+              className={`view-btn ${viewMode === 'list' ? 'active' : ''}`}
+              onClick={() => setViewMode('list')}
+              title="List view"
+            >
+              <List size={18} />
+            </button>
+            <button 
+              className={`view-btn ${viewMode === 'table' ? 'active' : ''}`}
+              onClick={() => setViewMode('table')}
+              title="Table view"
+            >
+              <Table size={18} />
+            </button>
+          </div>
+          <button onClick={fetchTickets} className="refresh-btn">
+            <RefreshCw size={18} />
+          </button>
+        </div>
+      </div>
+
+      {/* Content Area */}
+      {filteredTickets.length === 0 ? (
+        <div className="empty-state">
+          <XCircle className="empty-icon" size={64} />
+          <h3>No issues found</h3>
+          <p>No issues match your search or filter criteria</p>
+        </div>
+      ) : (
+        <>
+          {viewMode === 'board' && renderBoardView()}
+          {viewMode === 'list' && renderListView()}
+          {viewMode === 'table' && renderTableView()}
+        </>
       )}
 
       {showCreateModal && (
@@ -442,24 +656,36 @@ function TicketList() {
                   </select>
                 </div>
               </div>
-              <div className="form-group">
-                <label htmlFor="user_email">Email *</label>
-                <input
-                  id="user_email"
-                  type="email"
-                  value={formData.user_email}
-                  onChange={(e) => setFormData({...formData, user_email: e.target.value})}
-                  required
-                  placeholder="user@example.com"
-                  readOnly
-                />
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="user_email">Reporter Email *</label>
+                  <input
+                    id="user_email"
+                    type="email"
+                    value={formData.user_email}
+                    onChange={(e) => setFormData({...formData, user_email: e.target.value})}
+                    required
+                    placeholder="user@example.com"
+                    readOnly
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="assignee">Assignee</label>
+                  <input
+                    id="assignee"
+                    type="text"
+                    value={formData.assignee}
+                    onChange={(e) => setFormData({...formData, assignee: e.target.value})}
+                    placeholder="Assign to..."
+                  />
+                </div>
               </div>
               <div className="form-actions">
                 <button type="button" onClick={() => setShowCreateModal(false)} className="btn-cancel">
                   Cancel
                 </button>
                 <button type="submit" disabled={creating} className="btn-submit">
-                  {creating ? 'Creating...' : 'Create Ticket'}
+                  {creating ? 'Creating...' : 'Create Issue'}
                 </button>
               </div>
             </form>
@@ -544,24 +770,36 @@ function TicketList() {
                 </div>
                 <div className="form-group"></div>
               </div>
-              <div className="form-group">
-                <label htmlFor="edit-user_email">Email *</label>
-                <input
-                  id="edit-user_email"
-                  type="email"
-                  value={formData.user_email}
-                  onChange={(e) => setFormData({...formData, user_email: e.target.value})}
-                  required
-                  placeholder="user@example.com"
-                  readOnly
-                />
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="edit-user_email">Reporter Email *</label>
+                  <input
+                    id="edit-user_email"
+                    type="email"
+                    value={formData.user_email}
+                    onChange={(e) => setFormData({...formData, user_email: e.target.value})}
+                    required
+                    placeholder="user@example.com"
+                    readOnly
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="edit-assignee">Assignee</label>
+                  <input
+                    id="edit-assignee"
+                    type="text"
+                    value={formData.assignee || ''}
+                    onChange={(e) => setFormData({...formData, assignee: e.target.value})}
+                    placeholder="Assign to..."
+                  />
+                </div>
               </div>
               <div className="form-actions">
                 <button type="button" onClick={() => setShowEditModal(false)} className="btn-cancel">
                   Cancel
                 </button>
                 <button type="submit" disabled={updating} className="btn-submit">
-                  {updating ? 'Updating...' : 'Update Ticket'}
+                  {updating ? 'Updating...' : 'Update Issue'}
                 </button>
               </div>
             </form>
