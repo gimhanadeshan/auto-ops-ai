@@ -4,7 +4,8 @@ import {
   Shield, 
   UserCheck, 
   UserX, 
-  Edit, 
+  Edit2, 
+  Trash2,
   Search,
   Filter,
   RefreshCw,
@@ -253,18 +254,18 @@ function UserManagement() {
                   <td>
                     <div className="action-buttons">
                       <button
-                        className="btn-action btn-edit"
+                        className="icon-btn"
                         onClick={() => openRoleModal(user)}
                         title="Change Role"
                       >
-                        <Edit size={16} />
+                        <Edit2 size={16} />
                       </button>
                       <button
-                        className={`btn-action ${user.is_active ? 'btn-deactivate' : 'btn-activate'}`}
+                        className={`icon-btn ${user.is_active ? 'delete' : 'activate'}`}
                         onClick={() => handleToggleStatus(user)}
                         title={user.is_active ? 'Deactivate' : 'Activate'}
                       >
-                        {user.is_active ? <UserX size={16} /> : <UserCheck size={16} />}
+                        {user.is_active ? <Trash2 size={16} /> : <UserCheck size={16} />}
                       </button>
                     </div>
                   </td>
