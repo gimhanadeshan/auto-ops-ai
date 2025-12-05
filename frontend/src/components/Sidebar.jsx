@@ -14,12 +14,17 @@ import {
   Database,
   Zap,
   AlertCircle,
-  Rocket
+  Rocket,
+  Users,
+  FileCheck
 } from 'lucide-react'
 import ThemeToggle from './ThemeToggle'
 import '../styles/components/Sidebar.css'
 
 function Sidebar({ user, onLogout }) {
+  // Check if user is admin
+  const isAdmin = user?.role === 'system_admin' || user?.role === 'it_admin';
+
   const navItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/quick-actions', icon: Rocket, label: 'Quick Actions' },
@@ -30,6 +35,10 @@ function Sidebar({ user, onLogout }) {
     { path: '/automation', icon: Zap, label: 'Automation Rules' },
     { path: '/error-codes', icon: AlertCircle, label: 'Error Codes' },
     { path: '/knowledge-base', icon: Database, label: 'Knowledge Base' },
+    ...(isAdmin ? [
+      { path: '/users', icon: Users, label: 'User Management', adminOnly: true },
+      { path: '/audit-logs', icon: FileCheck, label: 'Audit Logs', adminOnly: true }
+    ] : []),
     { path: '/settings', icon: Settings, label: 'Settings' }
   ]
 
@@ -63,10 +72,12 @@ function Sidebar({ user, onLogout }) {
           <NavLink
             key={item.path}
             to={item.path}
-            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''} ${item.adminOnly ? 'admin-only' : ''}`}
+            title={item.adminOnly ? 'Admin Only' : item.label}
           >
             <item.icon size={20} />
             <span>{item.label}</span>
+            {item.adminOnly && <Shield size={14} className="admin-badge" />}
           </NavLink>
         ))}
       </nav>

@@ -68,6 +68,8 @@ export const ROUTES = {
   AUTOMATION: '/automation',
   ERROR_CODES: '/error-codes',
   KNOWLEDGE_BASE: '/knowledge-base',
+  USER_MANAGEMENT: '/users',
+  AUDIT_LOGS: '/audit-logs',
   SETTINGS: '/settings',
   ROOT: '/'
 }

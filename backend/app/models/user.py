@@ -2,11 +2,12 @@
 User models for database and API.
 """
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from sqlalchemy import Column, Integer, String, Boolean, DateTime
 from sqlalchemy.sql import func
 from pydantic import BaseModel, EmailStr
 from app.core.database import Base
+from app.models.role import Role, Permission, get_role_permissions
 
 
 # SQLAlchemy Model
@@ -18,17 +19,20 @@ class UserDB(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     name = Column(String, nullable=False)  # User's full name
     hashed_password = Column(String, nullable=False)
-    tier = Column(String, default="staff")  # staff, manager, contractor
+    role = Column(String, default=Role.STAFF.value)  # Using Role enum
+    tier = Column(String, default="staff")  # Deprecated: kept for backward compatibility
+    department = Column(String, nullable=True)  # For team-based access control
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
-
-# Pydantic Models for API
 class UserRegister(BaseModel):
     """User registration request."""
     email: EmailStr
     name: str
+    password: str
+    role: Role = Role.STAFF
+    department: Optional[str] = None
     password: str
     tier: str = "staff"  # staff, manager, contractor
 
@@ -38,17 +42,36 @@ class UserLogin(BaseModel):
     email: EmailStr
     password: str
 
-
 class UserResponse(BaseModel):
     """User response (without password)."""
     id: int
     email: str
     name: str
-    tier: str
+    role: str
+    department: Optional[str] = None
     is_active: bool
     created_at: datetime
+    permissions: Optional[List[str]] = None  # Computed field
     
     class Config:
+        from_attributes = True
+    
+    @classmethod
+    def from_db(cls, user_db: "UserDB"):
+        """Create UserResponse from UserDB with computed permissions."""
+        user_role = Role(user_db.role)
+        permissions = [p.value for p in get_role_permissions(user_role)]
+        
+        return cls(
+            id=user_db.id,
+            email=user_db.email,
+            name=user_db.name,
+            role=user_db.role,
+            department=user_db.department,
+            is_active=user_db.is_active,
+            created_at=user_db.created_at,
+            permissions=permissions
+        )
         from_attributes = True
 
 

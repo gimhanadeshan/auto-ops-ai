@@ -14,6 +14,8 @@ import AutomationPage from './components/AutomationPage'
 import ErrorCodesPage from './components/ErrorCodesPage'
 import QuickActionsPage from './components/QuickActionsPage'
 import KnowledgeBasePage from './components/KnowledgeBasePage'
+import UserManagement from './components/UserManagement'
+import AuditLogs from './components/AuditLogs'
 import Login from './components/Login'
 import Register from './components/Register'
 import './styles/App.css'
@@ -668,6 +670,8 @@ function MainLayout({ user, onLogout }) {
           <Route path="/automation" element={<AutomationPage />} />
           <Route path="/error-codes" element={<ErrorCodesPage />} />
           <Route path="/knowledge-base" element={<KnowledgeBasePage />} />
+          <Route path="/users" element={<UserManagement />} />
+          <Route path="/audit-logs" element={<AuditLogs user={user} />} />
           <Route path="/settings" element={<Settings user={user} />} />
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
         </Routes>
