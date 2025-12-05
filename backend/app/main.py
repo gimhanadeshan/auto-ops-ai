@@ -31,6 +31,11 @@ async def lifespan(app: FastAPI):
     # Initialize database
     logger.info("Initializing database...")
     try:
+        # Import models to ensure they're registered with Base
+        from app.models.ticket import TicketDB
+        from app.models.user import UserDB
+        from app.models.chat_history import ChatMessageDB
+        
         init_db()
         logger.info("Database initialized successfully")
     except Exception as e:

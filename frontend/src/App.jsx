@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom'
-import { fetchBackendStatus, sendChatMessage, resetChatConversation } from './api'
-import { Bot, User, Send, FileText, AlertCircle, Zap, Wrench, HelpCircle, Mic, MicOff } from 'lucide-react'
+import { fetchBackendStatus, sendChatMessage, resetChatConversation, sendChatMessageWithImage } from './api'
+import { Bot, User, Send, FileText, AlertCircle, Zap, Wrench, HelpCircle, Mic, MicOff, Image, X } from 'lucide-react'
 import { STORAGE_KEYS } from './config/constants'
 import { voiceService } from './services/voiceService'
 import Sidebar from './components/Sidebar'
@@ -20,21 +20,139 @@ import './styles/App.css'
 
 function ChatPage({ user }) {
   const [backendStatus, setBackendStatus] = useState(null)
-  const [messages, setMessages] = useState([
-    { 
-      role: 'assistant', 
-      content: `Hi ${user?.name || 'there'}! I'm your AI IT Support Assistant. How can I help you today?`,
-      timestamp: new Date().toISOString()
-    }
-  ])
+  const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [currentTicket, setCurrentTicket] = useState(null)
+  const [currentSessionId, setCurrentSessionId] = useState(null)  // Track session ID
   const [isListening, setIsListening] = useState(false)
   const [voiceSupported, setVoiceSupported] = useState(false)
   const [interimTranscript, setInterimTranscript] = useState('')
+  const [selectedImage, setSelectedImage] = useState(null)
+  const [imagePreview, setImagePreview] = useState(null)
   const messagesEndRef = useRef(null)
   const interimTranscriptRef = useRef('')
+  const fileInputRef = useRef(null)
+
+  // Storage keys for chat persistence
+  const CHAT_STORAGE_KEY = `auto_ops_chat_${user?.email || 'guest'}`
+  const SESSION_STORAGE_KEY = `auto_ops_session_${user?.email || 'guest'}`
+  const TICKET_STORAGE_KEY = `auto_ops_ticket_${user?.email || 'guest'}`
+  const RESUME_TICKET_KEY = `auto_ops_resume_ticket_${user?.email || 'guest'}`
+
+  // Initialize messages from localStorage or check for resume ticket context
+  useEffect(() => {
+    // First, check if we're resuming a chat from ticket view
+    const resumeContext = localStorage.getItem(RESUME_TICKET_KEY)
+    
+    if (resumeContext) {
+      try {
+        const context = JSON.parse(resumeContext)
+        // Clear the resume context immediately so it doesn't persist
+        localStorage.removeItem(RESUME_TICKET_KEY)
+        
+        // IMPORTANT: Clear old saved chat when starting a new ticket context
+        // This prevents loading old ticket's chat history
+        localStorage.removeItem(CHAT_STORAGE_KEY)
+        localStorage.removeItem(SESSION_STORAGE_KEY)
+        localStorage.removeItem(TICKET_STORAGE_KEY)
+        
+        // Set ticket context
+        setCurrentTicket(context.ticketId)
+        setCurrentSessionId(null)  // Reset session for new conversation
+        
+        if (context.resumeChat && context.existingMessages?.length > 0) {
+          // Resume existing chat - load the previous messages
+          const formattedMessages = context.existingMessages.map(msg => ({
+            role: msg.role,
+            content: msg.content,
+            timestamp: msg.created_at || new Date().toISOString(),
+            ticketId: context.ticketId
+          }))
+          
+          // Add a system message to show we're continuing
+          formattedMessages.push({
+            role: 'assistant',
+            content: `Continuing conversation for Ticket #${context.ticketId}: "${context.ticketTitle}"\n\nHow can I help you further with this issue?`,
+            timestamp: new Date().toISOString(),
+            ticketId: context.ticketId
+          })
+          
+          setMessages(formattedMessages)
+        } else if (context.isManualTicket) {
+          // Manual ticket - start fresh chat with ticket context
+          const welcomeMessage = {
+            role: 'assistant',
+            content: `Hi! I'm here to help with Ticket #${context.ticketId}: "${context.ticketTitle}"\n\n**Issue Description:**\n${context.ticketDescription}\n\n**Priority:** ${context.ticketPriority}\n\nLet me help you troubleshoot this issue. Could you provide more details about when this problem started or any error messages you've seen?`,
+            timestamp: new Date().toISOString(),
+            ticketId: context.ticketId
+          }
+          setMessages([welcomeMessage])
+          
+          // Save immediately to localStorage so it persists
+          localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify([welcomeMessage]))
+          localStorage.setItem(TICKET_STORAGE_KEY, context.ticketId.toString())
+        }
+        return
+      } catch (e) {
+        console.warn('Failed to parse resume context:', e)
+        localStorage.removeItem(RESUME_TICKET_KEY)
+      }
+    }
+
+    // Normal initialization - check for saved messages
+    const savedMessages = localStorage.getItem(CHAT_STORAGE_KEY)
+    const savedSession = localStorage.getItem(SESSION_STORAGE_KEY)
+    const savedTicket = localStorage.getItem(TICKET_STORAGE_KEY)
+
+    if (savedMessages) {
+      try {
+        const parsed = JSON.parse(savedMessages)
+        if (parsed && parsed.length > 0) {
+          setMessages(parsed)
+          if (savedSession) setCurrentSessionId(savedSession)
+          if (savedTicket) setCurrentTicket(parseInt(savedTicket))
+          return
+        }
+      } catch (e) {
+        console.warn('Failed to parse saved messages:', e)
+      }
+    }
+
+    // Default welcome message if no saved messages
+    setMessages([
+      { 
+        role: 'assistant', 
+        content: `Hi ${user?.name || 'there'}! I'm your AI IT Support Assistant. How can I help you today?`,
+        timestamp: new Date().toISOString()
+      }
+    ])
+  }, [user?.email])
+
+  // Save messages to localStorage whenever they change
+  useEffect(() => {
+    if (messages.length > 0) {
+      // Don't save image previews to avoid localStorage quota issues
+      const messagesToSave = messages.map(msg => ({
+        ...msg,
+        imagePreview: msg.imagePreview ? '[image attached]' : undefined
+      }))
+      localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messagesToSave))
+    }
+  }, [messages])
+
+  // Save session and ticket to localStorage
+  useEffect(() => {
+    if (currentSessionId) {
+      localStorage.setItem(SESSION_STORAGE_KEY, currentSessionId)
+    }
+  }, [currentSessionId])
+
+  useEffect(() => {
+    if (currentTicket) {
+      localStorage.setItem(TICKET_STORAGE_KEY, currentTicket.toString())
+    }
+  }, [currentTicket])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -123,7 +241,7 @@ function ChatPage({ user }) {
     setLoading(true)
 
     try {
-      const response = await sendChatMessage(messages.concat(userMessage), user.email, currentTicket)
+      const response = await sendChatMessage(messages.concat(userMessage), user.email, currentTicket, currentSessionId)
       
       const assistantMessage = {
         role: 'assistant',
@@ -137,6 +255,10 @@ function ChatPage({ user }) {
 
       setMessages(prev => [...prev, assistantMessage])
       
+      // Track session and ticket from response
+      if (response.session_id && !currentSessionId) {
+        setCurrentSessionId(response.session_id)
+      }
       if (response.ticket_id && !currentTicket) {
         setCurrentTicket(response.ticket_id)
       }
@@ -157,7 +279,7 @@ function ChatPage({ user }) {
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      handleSend()
+      handleSendAll()
     }
   }
 
@@ -182,19 +304,158 @@ function ChatPage({ user }) {
 
   const handleNewChat = () => {
     // Reset to new chat
-    setMessages([
-      { 
-        role: 'assistant', 
-        content: `Hi ${user?.name || 'there'}! I'm your AI IT Support Assistant. How can I help you today?`,
-        timestamp: new Date().toISOString()
-      }
-    ])
+    const welcomeMessage = { 
+      role: 'assistant', 
+      content: `Hi ${user?.name || 'there'}! I'm your AI IT Support Assistant. How can I help you today?`,
+      timestamp: new Date().toISOString()
+    }
+    setMessages([welcomeMessage])
     setCurrentTicket(null)
+    setCurrentSessionId(null)  // Reset session ID for new chat
+    clearSelectedImage()
     
-    // Reset backend conversation
+    // Clear localStorage for fresh start
+    localStorage.removeItem(CHAT_STORAGE_KEY)
+    localStorage.removeItem(SESSION_STORAGE_KEY)
+    localStorage.removeItem(TICKET_STORAGE_KEY)
+    localStorage.removeItem(RESUME_TICKET_KEY)
+    
+    // Reset backend conversation and get new session ID
     if (user?.email) {
       resetChatConversation(user.email)
+        .then(response => {
+          if (response?.session_id) {
+            setCurrentSessionId(response.session_id)
+          }
+        })
         .catch(err => console.warn('Could not reset conversation:', err))
+    }
+  }
+
+  // Image upload handlers
+  const handleImageSelect = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif']
+    if (!validTypes.includes(file.type)) {
+      const errorMessage = {
+        role: 'assistant',
+        content: 'Please select a valid image file (PNG, JPG, JPEG, WEBP, or GIF).',
+        timestamp: new Date().toISOString(),
+        isError: true
+      }
+      setMessages(prev => [...prev, errorMessage])
+      return
+    }
+
+    // Validate file size (max 10MB before compression)
+    if (file.size > 10 * 1024 * 1024) {
+      const errorMessage = {
+        role: 'assistant',
+        content: 'Image is too large. Please select an image under 10MB.',
+        timestamp: new Date().toISOString(),
+        isError: true
+      }
+      setMessages(prev => [...prev, errorMessage])
+      return
+    }
+
+    setSelectedImage(file)
+    
+    // Create preview URL
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      setImagePreview(reader.result)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const clearSelectedImage = () => {
+    setSelectedImage(null)
+    setImagePreview(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
+  const handleSendWithImage = async () => {
+    if (!selectedImage || loading) return
+
+    const userMessage = {
+      role: 'user',
+      content: input.trim() || 'Please analyze this image and help me troubleshoot the issue.',
+      timestamp: new Date().toISOString(),
+      imagePreview: imagePreview // Store preview for display
+    }
+
+    setMessages(prev => [...prev, userMessage])
+    const messageText = input.trim()
+    setInput('')
+    clearSelectedImage()
+    setLoading(true)
+
+    try {
+      const response = await sendChatMessageWithImage(
+        selectedImage,
+        messageText,
+        user.email,
+        currentTicket,
+        currentSessionId
+      )
+      
+      // Build response content with image analysis
+      let responseContent = response.message
+      if (response.image_analysis) {
+        const analysis = response.image_analysis
+        responseContent = `**📸 Image Analysis Results:**\n\n`
+        responseContent += `**Problem Identified:** ${analysis.issue_description || 'Analysis in progress...'}\n\n`
+        if (analysis.extracted_text) {
+          responseContent += `**Text/Error Found:** ${analysis.extracted_text}\n\n`
+        }
+        responseContent += `---\n\n${response.message}`
+      }
+
+      const assistantMessage = {
+        role: 'assistant',
+        content: responseContent,
+        timestamp: new Date().toISOString(),
+        ticketId: response.ticket_id,
+        action: response.action,
+        priorityInfo: response.priority_info,
+        imageAnalysis: response.image_analysis
+      }
+
+      setMessages(prev => [...prev, assistantMessage])
+      
+      // Track session and ticket
+      if (response.session_id && !currentSessionId) {
+        setCurrentSessionId(response.session_id)
+      }
+      if (response.ticket_id && !currentTicket) {
+        setCurrentTicket(response.ticket_id)
+      }
+
+    } catch (error) {
+      const errorMessage = {
+        role: 'assistant',
+        content: `Error analyzing image: ${error.message}. Please check if the backend is running.`,
+        timestamp: new Date().toISOString(),
+        isError: true
+      }
+      setMessages(prev => [...prev, errorMessage])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Modified handleSend to also handle image uploads
+  const handleSendAll = async () => {
+    if (selectedImage) {
+      await handleSendWithImage()
+    } else {
+      await handleSend()
     }
   }
 
@@ -212,10 +473,18 @@ function ChatPage({ user }) {
           <Bot size={28} />
           <div>
             <h2>AI Support Chat</h2>
-            <span className={`status-indicator ${backendStatus ? 'online' : 'offline'}`}>
-              <span className="status-dot"></span>
-              {backendStatus ? 'Online' : 'Offline'}
-            </span>
+            <div className="chat-status-row">
+              <span className={`status-indicator ${backendStatus ? 'online' : 'offline'}`}>
+                <span className="status-dot"></span>
+                {backendStatus ? 'Online' : 'Offline'}
+              </span>
+              {currentTicket && (
+                <span className="active-ticket-indicator">
+                  <FileText size={12} />
+                  Ticket #{currentTicket}
+                </span>
+              )}
+            </div>
           </div>
         </div>
         <div className="chat-header-right">
@@ -246,6 +515,11 @@ function ChatPage({ user }) {
                 </span>
               </div>
               <div className="message-text">
+                {msg.imagePreview && (
+                  <div className="message-image-preview">
+                    <img src={msg.imagePreview} alt="Uploaded" />
+                  </div>
+                )}
                 {msg.content}
               </div>
               {msg.ticketId && (
@@ -291,12 +565,40 @@ function ChatPage({ user }) {
             <span>{interimTranscript || 'Listening... Speak now'}</span>
           </div>
         )}
+        {imagePreview && (
+          <div className="image-preview-container">
+            <img src={imagePreview} alt="Selected" className="image-preview" />
+            <button 
+              onClick={clearSelectedImage} 
+              className="clear-image-btn"
+              title="Remove image"
+            >
+              <X size={16} />
+            </button>
+            <span className="image-preview-label">Image attached</span>
+          </div>
+        )}
         <div className="input-section">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleImageSelect}
+            accept="image/png,image/jpeg,image/jpg,image/webp,image/gif"
+            style={{ display: 'none' }}
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={loading || isListening}
+            className={`image-upload-btn ${selectedImage ? 'has-image' : ''}`}
+            title="Upload image (screenshot, error message, device photo)"
+          >
+            <Image size={20} />
+          </button>
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder={isListening ? "Listening..." : "Describe your IT issue... (e.g., 'My laptop is slow')"}
+            placeholder={selectedImage ? "Describe the issue shown in the image (optional)..." : isListening ? "Listening..." : "Describe your IT issue... (e.g., 'My laptop is slow')"}
             className="message-input"
             rows={2}
             disabled={loading || isListening}
@@ -312,8 +614,8 @@ function ChatPage({ user }) {
             </button>
           )}
           <button 
-            onClick={handleSend} 
-            disabled={loading || !input.trim() || isListening}
+            onClick={handleSendAll} 
+            disabled={loading || (!input.trim() && !selectedImage) || isListening}
             className="send-btn"
           >
             <Send size={18} />
@@ -323,10 +625,12 @@ function ChatPage({ user }) {
         <div className="input-hint">
           {voiceSupported ? (
             <>
-              Press Enter to send, Shift+Enter for new line • Click <Mic size={14} style={{ display: 'inline', verticalAlign: 'middle' }} /> to use voice input
+              Press Enter to send, Shift+Enter for new line • Click <Mic size={14} style={{ display: 'inline', verticalAlign: 'middle' }} /> for voice • Click <Image size={14} style={{ display: 'inline', verticalAlign: 'middle' }} /> to upload image
             </>
           ) : (
-            'Press Enter to send, Shift+Enter for new line'
+            <>
+              Press Enter to send, Shift+Enter for new line • Click <Image size={14} style={{ display: 'inline', verticalAlign: 'middle' }} /> to upload image
+            </>
           )}
         </div>
       </div>

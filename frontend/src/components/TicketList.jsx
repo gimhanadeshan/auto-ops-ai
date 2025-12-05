@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
-import { ArrowLeft, RefreshCw, AlertCircle, Zap, CheckCircle, Clock, XCircle, Loader, Plus, X, Edit2, Trash2, Search, Filter, LayoutGrid, List, Table, User, Calendar, Tag, MessageSquare } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { ArrowLeft, RefreshCw, AlertCircle, Zap, CheckCircle, Clock, XCircle, Loader, Plus, X, Edit2, Trash2, Search, Filter, LayoutGrid, List, Table, User, Calendar, Tag, MessageSquare, History, ChevronRight, Bot, PlayCircle } from 'lucide-react'
 import { ticketService } from '../services/ticketService'
+import { getTicketChatHistory, resumeChatSession } from '../api'
 import { 
   TICKET_PRIORITY, 
   TICKET_PRIORITY_LABELS, 
@@ -16,6 +17,8 @@ import {
 import '../styles/components/TicketList.css'
 
 function TicketList() {
+  const navigate = useNavigate()
+  
   // Get initial user email
   const getUserEmail = () => {
     const userData = localStorage.getItem(STORAGE_KEYS.USER_DATA)
@@ -50,6 +53,12 @@ function TicketList() {
     user_email: getUserEmail(),
     assignee: ''
   })
+  
+  // Chat history panel state
+  const [showChatHistory, setShowChatHistory] = useState(false)
+  const [selectedTicketForChat, setSelectedTicketForChat] = useState(null)
+  const [chatHistory, setChatHistory] = useState([])
+  const [loadingChatHistory, setLoadingChatHistory] = useState(false)
 
   useEffect(() => {
     fetchTickets()
@@ -212,6 +221,87 @@ function TicketList() {
     }
   }
 
+  const handleViewChatHistory = async (ticket) => {
+    setSelectedTicketForChat(ticket)
+    setShowChatHistory(true)
+    setLoadingChatHistory(true)
+    
+    try {
+      const result = await getTicketChatHistory(ticket.id)
+      // API returns { sessions: [{ messages: [...] }] }, flatten all messages
+      const allMessages = []
+      if (result.sessions && result.sessions.length > 0) {
+        result.sessions.forEach(session => {
+          if (session.messages) {
+            allMessages.push(...session.messages)
+          }
+        })
+        // Sort by created_at
+        allMessages.sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+      }
+      setChatHistory(allMessages)
+    } catch (err) {
+      console.error('Failed to load chat history:', err)
+      setChatHistory([])
+    } finally {
+      setLoadingChatHistory(false)
+    }
+  }
+
+  const closeChatHistory = () => {
+    setShowChatHistory(false)
+    setSelectedTicketForChat(null)
+    setChatHistory([])
+  }
+
+  // Continue existing chat - navigate to chat page with ticket context
+  const handleContinueChat = (ticket, existingMessages) => {
+    const userEmail = getUserEmail()
+    
+    // Store ticket context for chat page to pick up
+    const chatContext = {
+      ticketId: ticket.id,
+      ticketTitle: ticket.title,
+      ticketDescription: ticket.description,
+      ticketPriority: ticket.priority,
+      ticketStatus: ticket.status,
+      resumeChat: true,
+      existingMessages: existingMessages || []
+    }
+    
+    localStorage.setItem(`auto_ops_resume_ticket_${userEmail}`, JSON.stringify(chatContext))
+    
+    closeChatHistory()
+    navigate('/chat')
+  }
+
+  // Start new bot chat for manual ticket (no existing chat history)
+  const handleFixWithBot = (ticket) => {
+    const userEmail = getUserEmail()
+    
+    // Store ticket context with initial message about the issue
+    const chatContext = {
+      ticketId: ticket.id,
+      ticketTitle: ticket.title,
+      ticketDescription: ticket.description,
+      ticketPriority: ticket.priority,
+      ticketStatus: ticket.status,
+      resumeChat: false,
+      isManualTicket: true,
+      existingMessages: []
+    }
+    
+    localStorage.setItem(`auto_ops_resume_ticket_${userEmail}`, JSON.stringify(chatContext))
+    
+    closeChatHistory()
+    navigate('/chat')
+  }
+
+  const formatMessageTime = (dateString) => {
+    const date = new Date(dateString)
+    return date.toLocaleString()
+  }
+
   const handleDragStart = (e, ticket) => {
     setDraggedTicket(ticket)
     e.dataTransfer.effectAllowed = 'move'
@@ -337,6 +427,9 @@ function TicketList() {
                         <span>{ticket.user_email.split('@')[0]}</span>
                       </div>
                       <div className="ticket-actions-compact">
+                        <button onClick={() => handleViewChatHistory(ticket)} className="icon-btn" title="View chat history">
+                          <History size={14} />
+                        </button>
                         <button onClick={() => handleEditTicket(ticket)} className="icon-btn">
                           <Edit2 size={14} />
                         </button>
@@ -404,6 +497,9 @@ function TicketList() {
                 </div>
               </div>
               <div className="list-ticket-actions">
+                <button onClick={() => handleViewChatHistory(ticket)} className="icon-btn" title="View chat history">
+                  <History size={16} />
+                </button>
                 <button onClick={() => handleEditTicket(ticket)} className="icon-btn">
                   <Edit2 size={16} />
                 </button>
@@ -475,6 +571,9 @@ function TicketList() {
                 <td>{formatDate(ticket.created_at)}</td>
                 <td>
                   <div className="table-actions">
+                    <button onClick={() => handleViewChatHistory(ticket)} className="icon-btn" title="View chat history">
+                      <History size={14} />
+                    </button>
                     <button onClick={() => handleEditTicket(ticket)} className="icon-btn">
                       <Edit2 size={14} />
                     </button>
@@ -803,6 +902,111 @@ function TicketList() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Chat History Modal */}
+      {showChatHistory && (
+        <div className="modal-overlay" onClick={closeChatHistory}>
+          <div className="modal-content chat-history-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="chat-history-header-info">
+                <History size={20} />
+                <h2>Chat History - Ticket #{selectedTicketForChat?.id}</h2>
+              </div>
+              <button className="modal-close" onClick={closeChatHistory}>
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="chat-history-ticket-info">
+              <h3>{selectedTicketForChat?.title}</h3>
+              <div className="ticket-meta-row">
+                <span className={`badge priority-badge-${getPriorityClass(selectedTicketForChat?.priority)}`}>
+                  <Zap size={12} />
+                  {getPriorityLabel(selectedTicketForChat?.priority)}
+                </span>
+                <span className={`badge ${getStatusBadge(selectedTicketForChat?.status).class}`}>
+                  {getStatusBadge(selectedTicketForChat?.status).label}
+                </span>
+              </div>
+            </div>
+
+            <div className="chat-history-content">
+              {loadingChatHistory ? (
+                <div className="chat-loading">
+                  <Loader className="spinner" size={30} />
+                  <p>Loading chat history...</p>
+                </div>
+              ) : chatHistory.length === 0 ? (
+                <div className="chat-empty">
+                  <Bot size={48} />
+                  <p>No chat history found for this ticket</p>
+                  <small>This ticket was created manually. Start a conversation with the AI bot to troubleshoot and resolve this issue.</small>
+                  {selectedTicketForChat?.status !== 'resolved' && selectedTicketForChat?.status !== 'closed' && (
+                    <button 
+                      className="btn-fix-with-bot"
+                      onClick={() => handleFixWithBot(selectedTicketForChat)}
+                    >
+                      <Bot size={18} />
+                      Fix with AI Bot
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="chat-messages-list">
+                  {chatHistory.map((msg, index) => (
+                    <div key={msg.id || index} className={`chat-message-item ${msg.role}`}>
+                      <div className="chat-message-header">
+                        <span className="chat-role">
+                          {msg.role === 'user' ? (
+                            <>
+                              <User size={14} />
+                              User
+                            </>
+                          ) : (
+                            <>
+                              <MessageSquare size={14} />
+                              AI Assistant
+                            </>
+                          )}
+                        </span>
+                        <span className="chat-time">{formatMessageTime(msg.created_at)}</span>
+                      </div>
+                      <div className="chat-message-body">
+                        {msg.content}
+                        {msg.image_filename && (
+                          <div className="chat-image-indicator">
+                            📷 Image attached: {msg.image_filename}
+                          </div>
+                        )}
+                        {msg.image_analysis && (
+                          <div className="chat-image-analysis">
+                            <strong>Image Analysis:</strong> {msg.image_analysis}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            {/* Action buttons at bottom of modal */}
+            {!loadingChatHistory && chatHistory.length > 0 && 
+             selectedTicketForChat?.status !== 'resolved' && 
+             selectedTicketForChat?.status !== 'closed' && (
+              <div className="chat-history-actions">
+                <button 
+                  className="btn-continue-chat"
+                  onClick={() => handleContinueChat(selectedTicketForChat, chatHistory)}
+                >
+                  <PlayCircle size={18} />
+                  Continue Chat
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
