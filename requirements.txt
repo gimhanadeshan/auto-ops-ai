@@ -26,6 +26,7 @@ tiktoken==0.7.0
 # Chromadb is notoriously sensitive to Python versions. 
 # Works perfectly on Python 3.11.
 chromadb==0.5.11
+langchain-chroma==0.1.4
 
 # --- Utilities ---
 python-dotenv==1.0.1
