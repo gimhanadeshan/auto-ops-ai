@@ -73,13 +73,14 @@ def classify_intent_with_llm(
     STEP 1: Use LLM to classify if the message is technical.
     This is more accurate than keyword matching.
     """
-    # Build context from recent conversation
+    # Build context from recent conversation - use more context for resumed chats
     recent_context = ""
     if conversation_history:
-        recent_msgs = conversation_history[-4:]  # Last 4 messages
+        recent_msgs = conversation_history[-8:]  # Last 8 messages for better context
         for msg in recent_msgs:
             role = "User" if msg.get('role') == 'user' else "Bot"
-            recent_context += f"{role}: {msg.get('content', '')}\n"
+            content = msg.get('content', '')[:500]  # Limit each message length
+            recent_context += f"{role}: {content}\n"
     
     classification_prompt = f"""Analyze this IT support conversation and classify the user's intent.
 
@@ -280,8 +281,50 @@ async def chat_enhanced(
         llm_agent = get_llm_conversation_agent()
         analyzer = DatasetAnalyzer()
         
-        # Get conversation history from LLM agent (in-memory)
+        # Track which ticket's conversation is in memory to prevent cross-contamination
+        current_ticket_id = request.ticket_id
+        stored_ticket_key = f"{user_email}_ticket"
+        stored_ticket_id = getattr(llm_agent, 'current_tickets', {}).get(user_email)
+        
+        # Initialize ticket tracking dict if needed
+        if not hasattr(llm_agent, 'current_tickets'):
+            llm_agent.current_tickets = {}
+        
+        # CRITICAL FIX: Detect ticket context switch
+        # If frontend sent history (resumed chat) OR ticket ID changed, use frontend's history
+        is_resumed_chat = request.messages and len(request.messages) > 1
+        is_ticket_switch = current_ticket_id and stored_ticket_id and current_ticket_id != stored_ticket_id
+        
+        if is_ticket_switch:
+            chat_logger.info(f"TICKET SWITCH DETECTED: {stored_ticket_id} -> {current_ticket_id} - Clearing old context")
+            llm_agent.conversations[user_email] = []
+        
+        # Get conversation history
         conversation_history = llm_agent.conversations.get(user_email, [])
+        
+        # If this is a resumed chat (frontend sent previous messages), ALWAYS use frontend history
+        # This ensures we use the correct ticket's conversation, not a stale one
+        if is_resumed_chat:
+            # Convert frontend messages to backend format and restore to memory
+            frontend_history = []
+            for msg in request.messages[:-1]:  # All except the current message
+                if isinstance(msg, dict):
+                    frontend_history.append({
+                        'role': msg.get('role', 'user'),
+                        'content': msg.get('content', '')
+                    })
+            
+            if frontend_history:
+                conversation_history = frontend_history
+                # Replace in-memory history with frontend's history
+                llm_agent.conversations[user_email] = frontend_history
+                chat_logger.info(f"HISTORY RESTORED: Loaded {len(frontend_history)} messages from frontend for ticket #{current_ticket_id}")
+        
+        # Update which ticket we're working on
+        if current_ticket_id:
+            llm_agent.current_tickets[user_email] = current_ticket_id
+        
+        chat_logger.info(f"CONVERSATION HISTORY: {len(conversation_history)} messages in context (ticket #{current_ticket_id})")
         
         # ═══════════════════════════════════════════════════════════════════
         # STEP 1: LLM CLASSIFIER - Determine if technical

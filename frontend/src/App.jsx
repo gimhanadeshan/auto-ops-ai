@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom'
 import { fetchBackendStatus, sendChatMessage, resetChatConversation, sendChatMessageWithImage } from './api'
 import { Bot, User, Send, FileText, AlertCircle, Zap, Wrench, HelpCircle, Mic, MicOff, Image, X } from 'lucide-react'
 import { STORAGE_KEYS } from './config/constants'
@@ -19,6 +19,7 @@ import Register from './components/Register'
 import './styles/App.css'
 
 function ChatPage({ user }) {
+  const location = useLocation()  // Track navigation to detect when coming from tickets
   const [backendStatus, setBackendStatus] = useState(null)
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
@@ -30,6 +31,7 @@ function ChatPage({ user }) {
   const [interimTranscript, setInterimTranscript] = useState('')
   const [selectedImage, setSelectedImage] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
+  const [initKey, setInitKey] = useState(0)  // Force re-initialization
   const messagesEndRef = useRef(null)
   const interimTranscriptRef = useRef('')
   const fileInputRef = useRef(null)
@@ -40,64 +42,12 @@ function ChatPage({ user }) {
   const TICKET_STORAGE_KEY = `auto_ops_ticket_${user?.email || 'guest'}`
   const RESUME_TICKET_KEY = `auto_ops_resume_ticket_${user?.email || 'guest'}`
 
-  // Initialize messages from localStorage or check for resume ticket context
+  // Initialize messages from localStorage (resume context is handled in separate useEffect)
   useEffect(() => {
-    // First, check if we're resuming a chat from ticket view
+    // Skip if we have a resume context - let the other useEffect handle it
     const resumeContext = localStorage.getItem(RESUME_TICKET_KEY)
-    
     if (resumeContext) {
-      try {
-        const context = JSON.parse(resumeContext)
-        // Clear the resume context immediately so it doesn't persist
-        localStorage.removeItem(RESUME_TICKET_KEY)
-        
-        // IMPORTANT: Clear old saved chat when starting a new ticket context
-        // This prevents loading old ticket's chat history
-        localStorage.removeItem(CHAT_STORAGE_KEY)
-        localStorage.removeItem(SESSION_STORAGE_KEY)
-        localStorage.removeItem(TICKET_STORAGE_KEY)
-        
-        // Set ticket context
-        setCurrentTicket(context.ticketId)
-        setCurrentSessionId(null)  // Reset session for new conversation
-        
-        if (context.resumeChat && context.existingMessages?.length > 0) {
-          // Resume existing chat - load the previous messages
-          const formattedMessages = context.existingMessages.map(msg => ({
-            role: msg.role,
-            content: msg.content,
-            timestamp: msg.created_at || new Date().toISOString(),
-            ticketId: context.ticketId
-          }))
-          
-          // Add a system message to show we're continuing
-          formattedMessages.push({
-            role: 'assistant',
-            content: `Continuing conversation for Ticket #${context.ticketId}: "${context.ticketTitle}"\n\nHow can I help you further with this issue?`,
-            timestamp: new Date().toISOString(),
-            ticketId: context.ticketId
-          })
-          
-          setMessages(formattedMessages)
-        } else if (context.isManualTicket) {
-          // Manual ticket - start fresh chat with ticket context
-          const welcomeMessage = {
-            role: 'assistant',
-            content: `Hi! I'm here to help with Ticket #${context.ticketId}: "${context.ticketTitle}"\n\n**Issue Description:**\n${context.ticketDescription}\n\n**Priority:** ${context.ticketPriority}\n\nLet me help you troubleshoot this issue. Could you provide more details about when this problem started or any error messages you've seen?`,
-            timestamp: new Date().toISOString(),
-            ticketId: context.ticketId
-          }
-          setMessages([welcomeMessage])
-          
-          // Save immediately to localStorage so it persists
-          localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify([welcomeMessage]))
-          localStorage.setItem(TICKET_STORAGE_KEY, context.ticketId.toString())
-        }
-        return
-      } catch (e) {
-        console.warn('Failed to parse resume context:', e)
-        localStorage.removeItem(RESUME_TICKET_KEY)
-      }
+      return  // Will be handled by the navigation useEffect
     }
 
     // Normal initialization - check for saved messages
@@ -127,7 +77,72 @@ function ChatPage({ user }) {
         timestamp: new Date().toISOString()
       }
     ])
-  }, [user?.email])
+  }, [user?.email, location.key])  // Re-run when navigating to chat page
+
+  // Check for resume context on every render (in case navigation doesn't trigger useEffect)
+  useEffect(() => {
+    const resumeContext = localStorage.getItem(RESUME_TICKET_KEY)
+    if (resumeContext) {
+      // We have a resume context - process it immediately
+      try {
+        const context = JSON.parse(resumeContext)
+        // Clear the resume context immediately
+        localStorage.removeItem(RESUME_TICKET_KEY)
+        
+        // Clear old saved chat
+        localStorage.removeItem(CHAT_STORAGE_KEY)
+        localStorage.removeItem(SESSION_STORAGE_KEY)
+        localStorage.removeItem(TICKET_STORAGE_KEY)
+        
+        // Reset backend conversation to prevent cross-ticket contamination
+        if (user?.email) {
+          resetChatConversation(user.email).catch(err => {
+            console.warn('Failed to reset backend conversation:', err)
+          })
+        }
+        
+        // Set ticket context
+        setCurrentTicket(context.ticketId)
+        setCurrentSessionId(null)
+        
+        if (context.resumeChat && context.existingMessages?.length > 0) {
+          // Resume existing chat - load the previous messages
+          const formattedMessages = context.existingMessages.map(msg => ({
+            role: msg.role,
+            content: msg.content,
+            timestamp: msg.created_at || new Date().toISOString(),
+            ticketId: context.ticketId
+          }))
+          
+          // Add continuation message
+          formattedMessages.push({
+            role: 'assistant',
+            content: `Continuing conversation for Ticket #${context.ticketId}: "${context.ticketTitle}"\n\nHow can I help you further with this issue?`,
+            timestamp: new Date().toISOString(),
+            ticketId: context.ticketId
+          })
+          
+          setMessages(formattedMessages)
+          localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(formattedMessages))
+          localStorage.setItem(TICKET_STORAGE_KEY, context.ticketId.toString())
+        } else if (context.isManualTicket) {
+          // Manual ticket - start fresh
+          const welcomeMessage = {
+            role: 'assistant',
+            content: `Hi! I'm here to help with Ticket #${context.ticketId}: "${context.ticketTitle}"\n\n**Issue Description:**\n${context.ticketDescription}\n\n**Priority:** ${context.ticketPriority}\n\nLet me help you troubleshoot this issue. Could you provide more details about when this problem started or any error messages you've seen?`,
+            timestamp: new Date().toISOString(),
+            ticketId: context.ticketId
+          }
+          setMessages([welcomeMessage])
+          localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify([welcomeMessage]))
+          localStorage.setItem(TICKET_STORAGE_KEY, context.ticketId.toString())
+        }
+      } catch (e) {
+        console.warn('Failed to parse resume context:', e)
+        localStorage.removeItem(RESUME_TICKET_KEY)
+      }
+    }
+  }, [location])  // Run on every navigation
 
   // Save messages to localStorage whenever they change
   useEffect(() => {

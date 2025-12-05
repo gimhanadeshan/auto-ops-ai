@@ -183,11 +183,13 @@ Remember: Be helpful, concise, and human-like. One clear step at a time!
                 logger.info(f"[LLM] RAG Context provided: {len(rag_context)} chars")
             logger.info(f"[LLM] Conversation history: {len(conversation)} messages")
             
-            # Build prompt
+            # Build prompt - use more context for resumed chats (up to 10 messages)
             full_prompt = f"{system_prompt}\n\n"
-            for msg in conversation[-5:]:  # Last 5 messages for context
+            context_msgs = conversation[-10:]  # Last 10 messages for better context
+            for msg in context_msgs:
                 role = "User" if msg["role"] == "user" else "Assistant"
-                full_prompt += f"{role}: {msg['parts'][0]}\n"
+                content = msg['parts'][0][:800]  # Limit message length
+                full_prompt += f"{role}: {content}\n"
             
             full_prompt += "\nAssistant:"
             
@@ -202,9 +204,10 @@ Remember: Be helpful, concise, and human-like. One clear step at a time!
                 if rag_context:
                     logger.info("[LLM] Retrying without RAG context...")
                     simple_prompt = self.get_system_prompt(None) + "\n\n"
-                    for msg in conversation[-5:]:
+                    for msg in context_msgs:
                         role = "User" if msg["role"] == "user" else "Assistant"
-                        simple_prompt += f"{role}: {msg['parts'][0]}\n"
+                        content = msg['parts'][0][:800]
+                        simple_prompt += f"{role}: {content}\n"
                     simple_prompt += "\nAssistant:"
                     
                     response = self.model.generate_content(simple_prompt)
