@@ -253,6 +253,14 @@
   margin-bottom: var(--space-xl);
 }
 
+.metrics-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-lg);
+  margin-bottom: var(--space-xl);
+  max-width: 800px;
+}
+
 .metric-card {
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border-primary);

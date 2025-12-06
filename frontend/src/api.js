@@ -23,7 +23,7 @@ export async function fetchBackendStatus(options = {}) {
   }
 }
 
-export async function sendChatMessage(messages, userEmail, ticketId = null, sessionId = null) {
+export async function sendChatMessage(messages, userEmail, ticketId = null, sessionId = null, agentMode = false) {
   try {
     const response = await fetch(`${API_BASE_URL}/chat`, {
       method: 'POST',
@@ -37,7 +37,8 @@ export async function sendChatMessage(messages, userEmail, ticketId = null, sess
         })),
         user_email: userEmail,
         ticket_id: ticketId,
-        session_id: sessionId
+        session_id: sessionId,
+        agent_mode: agentMode
       }),
     });
 

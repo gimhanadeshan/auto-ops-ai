@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Activity, Cpu, HardDrive, Server, Wifi, RefreshCw, AlertTriangle, CheckCircle, Monitor, Shield } from 'lucide-react'
+import { Activity, Cpu, Server, RefreshCw, AlertTriangle, CheckCircle, Monitor, Shield } from 'lucide-react'
 import { monitoringService } from '../services/monitoringService'
 import PermissionModal from './PermissionModal'
 import '../styles/components/SystemMonitoring.css'
@@ -11,9 +11,7 @@ function SystemMonitoring() {
   const [usingRealData, setUsingRealData] = useState(false)
   const [systemMetrics, setSystemMetrics] = useState({
     cpu: 0,
-    memory: 0,
-    disk: 0,
-    network: 0
+    memory: 0
   })
 
   const [systemInfo, setSystemInfo] = useState({
@@ -94,9 +92,7 @@ function SystemMonitoring() {
         
         setSystemMetrics({
           cpu: realStats.cpu || 0,
-          memory: realStats.ram || 0,
-          disk: realStats.disk || 0,
-          network: realStats.network || 0
+          memory: realStats.ram || 0
         })
 
         if (realStats.details) {
@@ -107,7 +103,7 @@ function SystemMonitoring() {
         const newLog = {
           time: timestamp,
           level: 'info',
-          message: `System stats: CPU ${realStats.cpu}%, RAM ${realStats.ram}%, Disk ${realStats.disk}%`
+          message: `System stats: CPU ${realStats.cpu}%, RAM ${realStats.ram}%`
         }
         
         setLogs(prev => [newLog, ...prev].slice(0, 20))
@@ -122,9 +118,7 @@ function SystemMonitoring() {
         if (response && response.metrics) {
           setSystemMetrics({
             cpu: response.metrics.cpu || 0,
-            memory: response.metrics.memory || 0,
-            disk: response.metrics.disk || 0,
-            network: response.metrics.network || 0
+            memory: response.metrics.memory || 0
           })
 
           if (response.checks && response.checks.length > 0) {
@@ -333,7 +327,7 @@ function SystemMonitoring() {
         </div>
       </div>
 
-      <div className="metrics-grid">
+      <div className="metrics-grid metrics-grid-2">
         <MetricCard
           icon={Cpu}
           title="CPU Usage"
@@ -347,20 +341,6 @@ function SystemMonitoring() {
           value={systemMetrics.memory}
           unit="%"
           color={getMetricColor(systemMetrics.memory)}
-        />
-        <MetricCard
-          icon={HardDrive}
-          title="Disk Usage"
-          value={systemMetrics.disk}
-          unit="%"
-          color={getMetricColor(systemMetrics.disk)}
-        />
-        <MetricCard
-          icon={Wifi}
-          title="Network Activity"
-          value={systemMetrics.network}
-          unit="%"
-          color={getMetricColor(systemMetrics.network)}
         />
       </div>
 

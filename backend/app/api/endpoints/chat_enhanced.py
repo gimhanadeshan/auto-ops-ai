@@ -17,6 +17,7 @@ import logging
 
 from app.services.agents.llm_conversation_agent import get_llm_conversation_agent
 from app.services.dataset_analyzer import DatasetAnalyzer
+from app.services.agents.action_executor_agent import get_action_executor
 from app.core.database import get_db
 from sqlalchemy.orm import Session
 import os
@@ -43,6 +44,7 @@ class ChatRequest(BaseModel):
     ticket_id: Optional[int] = None
     user_email: Optional[str] = None
     session_id: Optional[str] = None  # For tracking conversation sessions
+    agent_mode: Optional[bool] = None  # Agent mode toggle
 
 
 class ChatResponse(BaseModel):
@@ -52,6 +54,9 @@ class ChatResponse(BaseModel):
     is_resolved: bool
     ticket_id: Optional[int] = None
     session_id: Optional[str] = None  # Return session ID for frontend tracking
+    suggested_actions: Optional[List[Dict]] = None  # Automated remediation actions
+    agent_mode: bool = False  # Current agent mode state
+    agent_mode_suggestion: Optional[str] = None  # Suggest enabling agent mode
     metadata: dict
 
 
@@ -147,14 +152,17 @@ def fallback_keyword_classification(user_message: str) -> IntentClassification:
                     'printer', 'monitor', 'keyboard', 'mouse', 'playstation', 'ps4', 'ps5', 
                     'xbox', 'nintendo', 'console', 'battery', 'charging', 'screen'],
         'software': ['app', 'application', 'software', 'program', 'install', 'update', 
-                    'chrome', 'browser', 'outlook', 'teams', 'zoom', 'crash', 'freeze'],
+                    'chrome', 'browser', 'outlook', 'teams', 'zoom', 'crash', 'freeze',
+                    'developer', 'code', 'web', 'website', 'page', 'changes', 'cache',
+                    'docker', 'git', 'visual studio', 'vs code', 'localhost', 'development'],
         'network': ['wifi', 'network', 'internet', 'connection', 'vpn', 'router', 'ethernet', 'slow'],
         'account': ['login', 'password', 'account', 'access', 'locked', 'authentication']
     }
     
     # Issue keywords
     issue_keywords = ['not working', 'broken', 'error', 'problem', 'issue', 'help', 
-                     'fix', 'crash', 'freeze', 'slow', 'cant', "can't", 'wont', "won't"]
+                     'fix', 'crash', 'freeze', 'slow', 'cant', "can't", 'wont', "won't",
+                     'not changing', 'not updating', 'not reflecting', 'not showing']
     
     # Urgency keywords
     urgency_critical = ['urgent', 'emergency', 'critical', 'asap', 'down', 'security']
@@ -327,6 +335,31 @@ async def chat_enhanced(
         chat_logger.info(f"CONVERSATION HISTORY: {len(conversation_history)} messages in context (ticket #{current_ticket_id})")
         
         # ═══════════════════════════════════════════════════════════════════
+        # AGENT MODE MANAGEMENT - Track mode per session
+        # ═══════════════════════════════════════════════════════════════════
+        # Initialize agent mode tracking
+        if not hasattr(llm_agent, 'agent_modes'):
+            llm_agent.agent_modes = {}  # {session_id: bool}
+        
+        # Get current agent mode from request or session state
+        current_agent_mode = llm_agent.agent_modes.get(session_id, False)
+        
+        # Update agent mode if explicitly toggled by user
+        if request.agent_mode is not None:
+            current_agent_mode = request.agent_mode
+            llm_agent.agent_modes[session_id] = current_agent_mode
+            chat_logger.info(f"AGENT MODE: {'ENABLED' if current_agent_mode else 'DISABLED'} by user")
+        
+        # Check if user is asking to auto-enable agent mode
+        auto_enable_triggers = ['can you fix', 'fix it', 'run diagnostic', 'check my system', 'help me fix']
+        if not current_agent_mode and any(trigger in user_message.lower() for trigger in auto_enable_triggers):
+            current_agent_mode = True
+            llm_agent.agent_modes[session_id] = True
+            chat_logger.info(f"AGENT MODE: AUTO-ENABLED by user request")
+        
+        chat_logger.info(f"AGENT MODE STATE: {'ON (Actions Enabled)' if current_agent_mode else 'OFF (Advice Only)'}")
+        
+        # ═══════════════════════════════════════════════════════════════════
         # STEP 1: LLM CLASSIFIER - Determine if technical
         # ═══════════════════════════════════════════════════════════════════
         intent = classify_intent_with_llm(llm_agent, user_message, conversation_history)
@@ -371,7 +404,21 @@ async def chat_enhanced(
         # STEP 4: TICKET INTELLIGENCE - Create/update tickets
         # ═══════════════════════════════════════════════════════════════════
         ticket_id = request.ticket_id
-        turn_count = len([m for m in conversation_history if m.get('role') == 'user'])
+        
+        # Count REAL user turns (exclude SYSTEM interpretation messages)
+        # SYSTEM messages start with "[SYSTEM:" and are auto-generated for action result interpretation
+        real_user_messages = [
+            m for m in conversation_history 
+            if m.get('role') == 'user' and not m.get('content', '').startswith('[SYSTEM:')
+        ]
+        turn_count = len(real_user_messages)
+        
+        # Also force ticket creation if user explicitly says issue persists after troubleshooting
+        # This handles cases like "still slow", "still not working", etc.
+        persistence_keywords = ['still slow', 'still not', 'still having', 'not working', 'didnt work', "didn't work", 'not fixed', 'same problem', 'same issue']
+        user_says_issue_persists = any(kw in user_message.lower() for kw in persistence_keywords)
+        if user_says_issue_persists and intent.is_technical:
+            turn_count = max(turn_count, 3)  # Force ticket creation threshold
         
         # Create ticket for technical issues
         if intent.is_technical and not ticket_id:
@@ -435,6 +482,74 @@ async def chat_enhanced(
             logger.warning(f"[CHAT-HISTORY] Failed to save messages: {e}")
             # Don't fail the request if history save fails
         
+        # ═══════════════════════════════════════════════════════════════════
+        # STEP 7: SUGGEST AUTOMATED ACTIONS - Only in Agent Mode
+        # ═══════════════════════════════════════════════════════════════════
+        suggested_actions = None
+        troubleshooting_step = 1
+        remaining_actions = []
+        agent_mode_suggestion = None
+        
+        # Try to get actions for ANY message that might be technical (even if classifier is unsure)
+        # This handles cases where fallback classifier misses developer/technical terms
+        should_suggest_actions = (intent.is_technical and not response['is_resolved']) or \
+                                any(word in user_message.lower() for word in ['developer', 'code', 'cache', 'not changing', 'not updating', 'not reflecting'])
+        
+        # AGENT MODE CHECK: Only suggest actions if agent mode is enabled
+        if should_suggest_actions and current_agent_mode:
+            try:
+                action_executor = get_action_executor()
+                # Build rich issue context from conversation
+                issue_context = user_message
+                if conversation_history:
+                    # Include both user messages AND assistant responses for context
+                    # This helps understand what was already tried/suggested
+                    context_parts = []
+                    for msg in conversation_history[-6:]:  # Last 6 messages (3 exchanges)
+                        role = msg.get('role', 'user')
+                        content = msg.get('content', '')
+                        if content and not content.startswith('[SYSTEM:'):
+                            if role == 'user':
+                                context_parts.append(f"User: {content}")
+                            else:
+                                # Include key parts of assistant response (troubleshooting steps mentioned)
+                                context_parts.append(f"Assistant suggested: {content[:200]}")
+                    context_parts.append(f"User: {user_message}")
+                    issue_context = '\n'.join(context_parts)
+                
+                # INTELLIGENT ACTION SUGGESTION:
+                # Use LLM to understand the issue and suggest the RIGHT actions
+                # Not just predefined patterns - truly think about what's needed
+                
+                chat_logger.info("Using LLM-based intelligent action suggestion")
+                all_actions = await action_executor.get_llm_intelligent_actions(
+                    issue_description=user_message,
+                    conversation_context=issue_context,
+                    category=intent.category,
+                    urgency=intent.urgency,
+                    user_email=user_email
+                )
+                
+                if all_actions:
+                    # Step-by-step: Only return the FIRST action
+                    # Store remaining actions for follow-up
+                    suggested_actions = [all_actions[0]]  # Only first action
+                    remaining_actions = all_actions[1:] if len(all_actions) > 1 else []
+                    troubleshooting_step = 1
+                    
+                    chat_logger.info(f"ACTIONS SUGGESTED: Step 1 of {len(all_actions)}")
+                    chat_logger.info(f"  - {all_actions[0].get('name')} ({all_actions[0].get('risk_level')})")
+                    if remaining_actions:
+                        chat_logger.info(f"  Remaining steps: {[a.get('name') for a in remaining_actions]}")
+            except Exception as e:
+                logger.warning(f"[ACTIONS] Failed to get suggestions: {e}")
+                # Don't fail the request if action suggestion fails
+        
+        # If should suggest actions but agent mode is OFF, suggest enabling it
+        elif should_suggest_actions and not current_agent_mode:
+            agent_mode_suggestion = "💡 Tip: Enable Agent Mode to get automated troubleshooting actions"
+            chat_logger.info("AGENT MODE SUGGESTION: User has technical issue but agent mode is disabled")
+        
         chat_logger.info("=" * 80 + "\n")
         
         # Return response
@@ -445,13 +560,22 @@ async def chat_enhanced(
             is_resolved=response['is_resolved'],
             ticket_id=ticket_id,
             session_id=session_id,
+            suggested_actions=suggested_actions,
+            agent_mode=current_agent_mode,
+            agent_mode_suggestion=agent_mode_suggestion,
             metadata={
                 **response.get('metadata', {}),
                 "category": intent.category,
                 "urgency": intent.urgency,
                 "rag_found": rag_found,
                 "classifier_confidence": intent.confidence,
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.utcnow().isoformat(),
+                # Step-by-step troubleshooting info
+                "troubleshooting_step": troubleshooting_step if suggested_actions else None,
+                "total_steps": len(suggested_actions or []) + len(remaining_actions),
+                "remaining_actions": remaining_actions,  # For follow-up steps
+                # Agent mode state
+                "agent_mode_active": current_agent_mode
             }
         )
     
@@ -922,7 +1046,12 @@ async def chat_with_image(
         # STEP 4: TICKET MANAGEMENT (same as regular chat)
         # ═══════════════════════════════════════════════════════════════════
         current_ticket_id = ticket_id
-        turn_count = len([m for m in conversation_history if m.get('role') == 'user'])
+        # Count REAL user turns (exclude SYSTEM interpretation messages)
+        real_user_messages = [
+            m for m in conversation_history 
+            if m.get('role') == 'user' and not m.get('content', '').startswith('[SYSTEM:')
+        ]
+        turn_count = len(real_user_messages)
         
         # Create ticket for technical issues (with image context)
         if intent.is_technical and not current_ticket_id:
