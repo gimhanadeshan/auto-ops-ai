@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { BrowserRouter as Router, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom'
 import { fetchBackendStatus, sendChatMessage, resetChatConversation, sendChatMessageWithImage } from './api'
-import { Bot, User, Send, FileText, AlertCircle, Zap, Wrench, HelpCircle, Mic, MicOff, Image, X } from 'lucide-react'
+import { Bot, User, Send, FileText, AlertCircle, Zap, Wrench, HelpCircle, Mic, MicOff, Image, X, CheckCircle, XCircle } from 'lucide-react'
 import { STORAGE_KEYS } from './config/constants'
 import { voiceService } from './services/voiceService'
 import actionService from './services/actionService'
@@ -859,7 +859,7 @@ ${typeof output === 'string' ? output : JSON.stringify(output, null, 2)}`
               />
               <span className="toggle-slider"></span>
             </label>
-            {agentMode && <span className="agent-mode-indicator">🤖</span>}
+            {agentMode && <span className="agent-mode-indicator"><Bot size={18} /></span>}
           </div>
           <button
             onClick={handleNewChat}
@@ -952,15 +952,15 @@ ${typeof output === 'string' ? output : JSON.stringify(output, null, 2)}`
                       className="feedback-btn yes"
                       onClick={() => handleTroubleshootingFeedback(true)}
                     >
-                      ✅ Yes, it's fixed!
+                      <CheckCircle size={16} /> Yes, it's fixed!
                     </button>
                     <button 
                       className="feedback-btn no"
                       onClick={() => handleTroubleshootingFeedback(false)}
                     >
-                      {msg.isLastStep || remainingActions.length === 0 
-                        ? '❌ No, escalate to support' 
-                        : '❌ No, try next step'}
+                      <XCircle size={16} /> {msg.isLastStep || remainingActions.length === 0 
+                        ? 'No, escalate to support' 
+                        : 'No, try next step'}
                     </button>
                   </div>
                 </div>
