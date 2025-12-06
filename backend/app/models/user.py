@@ -23,7 +23,7 @@ class UserDB(Base):
     tier = Column(String, default="staff")  # Deprecated: kept for backward compatibility
     department = Column(String, nullable=True)  # For team-based access control
     manager_id = Column(Integer, nullable=True)  # ID of user's manager for team hierarchy
-    is_active = Column(Boolean, default=True)
+    is_active = Column(Boolean, default=False)  # Inactive by default - admin must activate
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

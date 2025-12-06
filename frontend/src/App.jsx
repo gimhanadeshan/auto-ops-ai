@@ -685,6 +685,29 @@ function App() {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
 
+  // Load primary color on app initialization
+  useEffect(() => {
+    const savedColor = localStorage.getItem('primaryColor')
+    if (savedColor) {
+      const root = document.documentElement
+      root.style.setProperty('--color-primary', savedColor)
+      
+      // Adjust hover color
+      const hexToRgb = (hex) => {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
+        return result ? {
+          r: parseInt(result[1], 16),
+          g: parseInt(result[2], 16),
+          b: parseInt(result[3], 16)
+        } : { r: 20, g: 184, b: 166 }
+      }
+      
+      const rgb = hexToRgb(savedColor)
+      const hoverColor = `rgb(${Math.max(0, rgb.r - 20)}, ${Math.max(0, rgb.g - 20)}, ${Math.max(0, rgb.b - 20)})`
+      root.style.setProperty('--color-primary-hover', hoverColor)
+    }
+  }, [])
+
   useEffect(() => {
     const storedUser = localStorage.getItem(STORAGE_KEYS.USER_DATA)
     if (storedUser) {

@@ -19,15 +19,18 @@ async def register(
     db: Session = Depends(get_db)
 ):
     """
-    Register a new user.
+    Register a new user (account will be inactive until admin approves).
     
     - **email**: Valid email address
     - **name**: Full name
     - **password**: Strong password (min 6 characters)
     - **tier**: User tier (staff, manager, contractor)
+    
+    Note: New accounts are created as inactive and require admin activation.
     """
     try:
         user = auth_service.register_user(db, user_data)
+        logger.info(f"User registered, pending activation: {user_data.email}")
         return user
     except HTTPException:
         raise

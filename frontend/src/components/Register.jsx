@@ -71,7 +71,9 @@ function Register() {
               <CheckCircle size={64} strokeWidth={2} />
             </span>
             <h2>Registration Successful!</h2>
-            <p>Redirecting to login...</p>
+            <p>Your account has been created and is pending activation.</p>
+            <p>An administrator will review and activate your account shortly.</p>
+            <p style={{ marginTop: '1rem', fontSize: '0.9rem' }}>Redirecting to login...</p>
           </div>
         </div>
       </div>
@@ -87,126 +89,163 @@ function Register() {
           <div className="particle"></div>
           <div className="particle"></div>
           <div className="particle"></div>
-          <div className="particle"></div>
-          <div className="particle"></div>
-          <div className="particle"></div>
-          <div className="particle"></div>
         </div>
         <div className="scan-line"></div>
       </div>
-      <div className="auth-card register-card">
-        <div className="auth-header">
-          <div className="auth-icon">
-            <Bot size={48} strokeWidth={2} />
+
+      <div className="auth-content-wrapper">
+        {/* Left Side - Branding */}
+        <div className="auth-branding">
+          <div className="branding-content">
+            <div className="brand-icon">
+              <Bot size={64} strokeWidth={2} />
+            </div>
+            <h1 className="brand-title">Auto-Ops-AI</h1>
+            <p className="brand-subtitle">AI-Powered IT Support Assistant</p>
+            <div className="brand-features">
+              <div className="feature-item">
+                <CheckCircle size={20} />
+                <span>Instant Support</span>
+              </div>
+              <div className="feature-item">
+                <CheckCircle size={20} />
+                <span>Smart Automation</span>
+              </div>
+              <div className="feature-item">
+                <CheckCircle size={20} />
+                <span>24/7 Availability</span>
+              </div>
+            </div>
           </div>
-          <h1>Auto-Ops-AI</h1>
-          <p>AI-powered IT Support Assistant</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="auth-form register-form">
-          <h2>Create Account</h2>
+        {/* Right Side - Registration Form */}
+        <div className="auth-card register-card">
+          <div className="auth-card-header">
+            <h2>Create Your Account</h2>
+            <p>Join us to get started with AI-powered IT support</p>
+          </div>
 
-          {error && (
-            <div className="error-alert">
-              <AlertTriangle size={20} />
-              <span>{error}</span>
-            </div>
-          )}
+          <form onSubmit={handleSubmit} className="auth-form register-form">
+            {error && (
+              <div className="error-alert">
+                <AlertTriangle size={20} />
+                <span>{error}</span>
+              </div>
+            )}
 
-          <div className="form-grid">
             <div className="form-group">
-              <label>
-                <User size={16} />
+              <label htmlFor="name">
+                <User size={18} />
                 <span>Full Name</span>
               </label>
               <input
+                id="name"
                 type="text"
                 name="name"
                 value={formData.name}
                 onChange={handleChange}
-                placeholder="John Doe"
+                placeholder="Enter your full name"
                 required
               />
             </div>
 
             <div className="form-group">
-              <label>
-                <Mail size={16} />
-                <span>Email</span>
+              <label htmlFor="email">
+                <Mail size={18} />
+                <span>Email Address</span>
               </label>
               <input
+                id="email"
                 type="email"
                 name="email"
                 value={formData.email}
                 onChange={handleChange}
-                placeholder="john.doe@company.com"
+                placeholder="you@company.com"
                 required
                 autoComplete="email"
               />
             </div>
 
             <div className="form-group">
-              <label>
-                <Shield size={16} />
-                <span>User Tier</span>
+              <label htmlFor="tier">
+                <Shield size={18} />
+                <span>User Role</span>
               </label>
               <select
+                id="tier"
                 name="tier"
                 value={formData.tier}
                 onChange={handleChange}
                 className="tier-select"
               >
-                <option value="staff">Staff</option>
+                <option value="staff">Staff Member</option>
                 <option value="manager">Manager</option>
                 <option value="contractor">Contractor</option>
               </select>
-              <small>Managers get higher priority on tickets</small>
+              <small className="field-hint">Choose your role in the organization</small>
             </div>
 
-            <div className="form-group">
-              <label>
-                <Lock size={16} />
-                <span>Password</span>
-              </label>
-              <input
-                type="password"
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-                placeholder="••••••••"
-                required
-                autoComplete="new-password"
-                minLength={6}
-              />
-              <small>Minimum 6 characters</small>
+            <div className="form-row">
+              <div className="form-group">
+                <label htmlFor="password">
+                  <Lock size={18} />
+                  <span>Password</span>
+                </label>
+                <input
+                  id="password"
+                  type="password"
+                  name="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  placeholder="Create a password"
+                  required
+                  autoComplete="new-password"
+                  minLength={6}
+                />
+                <small className="field-hint">At least 6 characters</small>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="confirmPassword">
+                  <Lock size={18} />
+                  <span>Confirm Password</span>
+                </label>
+                <input
+                  id="confirmPassword"
+                  type="password"
+                  name="confirmPassword"
+                  value={formData.confirmPassword}
+                  onChange={handleChange}
+                  placeholder="Re-enter password"
+                  required
+                  autoComplete="new-password"
+                />
+              </div>
             </div>
 
-            <div className="form-group form-group-full">
-              <label>
-                <Lock size={16} />
-                <span>Confirm Password</span>
-              </label>
-              <input
-                type="password"
-                name="confirmPassword"
-                value={formData.confirmPassword}
-                onChange={handleChange}
-                placeholder="••••••••"
-                required
-                autoComplete="new-password"
-              />
+            <button type="submit" className="auth-btn" disabled={loading}>
+              {loading ? (
+                <>
+                  <div className="spinner"></div>
+                  <span>Creating Account...</span>
+                </>
+              ) : (
+                <>
+                  <UserPlus size={20} />
+                  <span>Create Account</span>
+                </>
+              )}
+            </button>
+
+            <div className="auth-switch">
+              Already have an account? 
+              <button type="button" onClick={() => navigate('/login')} className="link-btn">
+                Sign in here
+              </button>
             </div>
-          </div>
-
-          <button type="submit" className="auth-btn" disabled={loading}>
-            <UserPlus size={18} />
-            <span>{loading ? 'Creating Account...' : 'Register'}</span>
-          </button>
-
-          <div className="auth-switch">
-            Already have an account? <button type="button" onClick={() => navigate('/login')} className="link-btn">Login</button>
-          </div>
-        </form>
+          </form>
+        </div>
       </div>
     </div>
   )

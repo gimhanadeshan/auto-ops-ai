@@ -51,7 +51,7 @@ class AuthService:
     
     @staticmethod
     def register_user(db: Session, user_data: UserRegister) -> UserDB:
-        """Register a new user."""
+        """Register a new user with inactive status by default."""
         # Check if user already exists
         existing_user = db.query(UserDB).filter(UserDB.email == user_data.email).first()
         if existing_user:
@@ -60,20 +60,21 @@ class AuthService:
                 detail="Email already registered"
             )
         
-        # Create new user
+        # Create new user with inactive status by default
         hashed_password = AuthService.hash_password(user_data.password)
         db_user = UserDB(
             email=user_data.email,
             name=user_data.name,
             hashed_password=hashed_password,
-            tier=user_data.tier
+            tier=user_data.tier,
+            is_active=False  # Set inactive by default - admin must activate
         )
         
         db.add(db_user)
         db.commit()
         db.refresh(db_user)
         
-        logger.info(f"User registered: {user_data.email}")
+        logger.info(f"User registered (inactive): {user_data.email}")
         return db_user
     
     @staticmethod
@@ -96,7 +97,7 @@ class AuthService:
         if not user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="User account is inactive"
+                detail="Account pending activation. Please contact your administrator."
             )
         
         logger.info(f"User authenticated: {login_data.email}")

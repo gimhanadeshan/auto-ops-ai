@@ -337,7 +337,7 @@ function UserManagement() {
             <Plus size={18} />
             Create User
           </button>
-          <button className="btn-primary" onClick={fetchUsers} disabled={loading}>
+          <button className="btn-refresh" onClick={fetchUsers} disabled={loading}>
             <RefreshCw size={18} className={loading ? 'spinning' : ''} />
             Refresh
           </button>

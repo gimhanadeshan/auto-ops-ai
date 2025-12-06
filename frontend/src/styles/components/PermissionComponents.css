@@ -37,7 +37,6 @@
   padding: 0.5rem 1rem;
   background: #fff3cd;
   color: #856404;
-  border-radius: 6px;
   font-size: 0.85rem;
   font-weight: 500;
   margin-top: 0.5rem;
@@ -97,7 +96,6 @@
   padding: 1.5rem;
   background: var(--card-background);
   border: 1px solid var(--border-color);
-  border-radius: 12px;
   text-decoration: none;
   color: var(--text-primary);
   transition: all 0.3s;
@@ -123,7 +121,6 @@
   margin-top: 1.5rem;
   padding: 1rem;
   background: var(--background);
-  border-radius: 8px;
   border: 1px solid var(--border-color);
 }
 
@@ -170,7 +167,6 @@
 .user-management .user-avatar {
   width: 36px;
   height: 36px;
-  border-radius: 50%;
   background: var(--primary-color);
   color: white;
   display: flex;
@@ -185,7 +181,6 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.4rem 0.75rem;
-  border-radius: 20px;
   font-size: 0.8rem;
   font-weight: 600;
   color: white;
@@ -196,7 +191,6 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.4rem 0.75rem;
-  border-radius: 20px;
   font-size: 0.8rem;
   font-weight: 500;
 }
@@ -246,7 +240,6 @@
   padding: 0.5rem;
   background: var(--card-background);
   border: 1px solid var(--border-color);
-  border-radius: 6px;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -325,3 +318,4 @@
     grid-template-columns: 1fr;
   }
 }
+

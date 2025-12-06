@@ -1,9 +1,15 @@
-import { useState } from 'react'
-import { User, Bell, Shield, Moon, Sun, Database, Zap, Save } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { User, Bell, Shield, Moon, Sun, Database, Zap, Save, Palette } from 'lucide-react'
+import { useTheme } from '../context/ThemeContext'
 import '../styles/components/Settings.css'
 
 function Settings({ user }) {
-  const [darkMode, setDarkMode] = useState(true)
+  const { theme, toggleTheme, isDark } = useTheme()
+  
+  const [primaryColor, setPrimaryColor] = useState(() => {
+    return localStorage.getItem('primaryColor') || '#14b8a6'
+  })
+  
   const [notifications, setNotifications] = useState({
     email: true,
     push: false,
@@ -15,6 +21,36 @@ function Settings({ user }) {
     confidenceThreshold: 75,
     escalationDelay: 30
   })
+
+  useEffect(() => {
+    const root = document.documentElement
+    root.style.setProperty('--color-primary', primaryColor)
+    
+    // Adjust hover color based on primary
+    const rgb = hexToRgb(primaryColor)
+    const hoverColor = `rgb(${Math.max(0, rgb.r - 20)}, ${Math.max(0, rgb.g - 20)}, ${Math.max(0, rgb.b - 20)})`
+    root.style.setProperty('--color-primary-hover', hoverColor)
+    
+    localStorage.setItem('primaryColor', primaryColor)
+  }, [primaryColor])
+
+  const hexToRgb = (hex) => {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
+    return result ? {
+      r: parseInt(result[1], 16),
+      g: parseInt(result[2], 16),
+      b: parseInt(result[3], 16)
+    } : { r: 20, g: 184, b: 166 }
+  }
+
+  const professionalColors = [
+    { name: 'Teal', color: '#14b8a6', desc: 'Professional & Balanced' },
+    { name: 'Navy', color: '#1e40af', desc: 'Corporate & Trustworthy' },
+    { name: 'Slate', color: '#475569', desc: 'Neutral & Modern' },
+    { name: 'Emerald', color: '#059669', desc: 'Growth & Success' },
+    { name: 'Indigo', color: '#4f46e5', desc: 'Tech & Innovation' },
+    { name: 'Cyan', color: '#0891b2', desc: 'Clear & Digital' }
+  ]
 
   const handleSave = () => {
     alert('Settings saved successfully!')
@@ -186,11 +222,11 @@ function Settings({ user }) {
           </div>
         </div>
 
-        {/* Appearance */}
+        {/* Appearance & Theme Customization */}
         <div className="settings-section">
           <div className="section-title">
-            {darkMode ? <Moon size={22} /> : <Sun size={22} />}
-            <h2>Appearance</h2>
+            <Palette size={22} />
+            <h2>Appearance & Theme</h2>
           </div>
           <div className="settings-list">
             <div className="toggle-item">
@@ -201,11 +237,35 @@ function Settings({ user }) {
               <label className="toggle-switch">
                 <input 
                   type="checkbox" 
-                  checked={darkMode}
-                  onChange={(e) => setDarkMode(e.target.checked)}
+                  checked={isDark}
+                  onChange={toggleTheme}
                 />
                 <span className="toggle-slider"></span>
               </label>
+            </div>
+          </div>
+          
+          <div className="color-themes" style={{ marginTop: 'var(--space-lg)' }}>
+            <label style={{ marginBottom: 'var(--space-md)', display: 'block', color: 'var(--color-text-primary)', fontSize: 'var(--font-size-base)', fontWeight: 'var(--font-weight-semibold)' }}>
+              Professional Color Themes:
+            </label>
+            <div className="theme-grid">
+              {professionalColors.map((theme) => (
+                <button
+                  key={theme.color}
+                  className={`theme-card ${primaryColor === theme.color ? 'active' : ''}`}
+                  onClick={() => setPrimaryColor(theme.color)}
+                >
+                  <div className="theme-color-preview" style={{ background: theme.color }} />
+                  <div className="theme-info">
+                    <span className="theme-name">{theme.name}</span>
+                    <span className="theme-desc">{theme.desc}</span>
+                  </div>
+                  {primaryColor === theme.color && (
+                    <div className="theme-active-badge">✓</div>
+                  )}
+                </button>
+              ))}
             </div>
           </div>
         </div>
