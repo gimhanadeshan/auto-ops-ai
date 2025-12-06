@@ -54,7 +54,6 @@
   background: var(--color-primary);
   color: white;
   border: none;
-  border-radius: 3px;
   font-weight: 600;
   font-size: 0.875rem;
   cursor: pointer;
@@ -96,9 +95,9 @@
   gap: 0.5rem;
   background: var(--color-bg-primary);
   border: 2px solid var(--color-border-primary);
-  border-radius: 3px;
-  padding: 0.5rem 0.75rem;
+  padding: 0 0.75rem;
   min-width: 300px;
+  height: 38px;
 }
 
 .search-box input {
@@ -108,6 +107,7 @@
   font-size: 0.875rem;
   color: var(--color-text-primary);
   outline: none;
+  width: auto;
 }
 
 .search-box:focus-within {
@@ -124,7 +124,6 @@
   background: var(--color-bg-primary);
   color: var(--color-text-secondary);
   border: 1px solid var(--color-border-primary);
-  border-radius: 3px;
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
@@ -161,7 +160,6 @@
   gap: 0.25rem;
   background: var(--color-bg-primary);
   border: 1px solid var(--color-border-primary);
-  border-radius: 3px;
   padding: 0.25rem;
 }
 
@@ -170,7 +168,6 @@
   background: transparent;
   color: var(--color-text-secondary);
   border: none;
-  border-radius: 3px;
   cursor: pointer;
   transition: all 0.2s;
   display: flex;
@@ -197,7 +194,6 @@
   background: var(--color-bg-primary);
   color: var(--color-text-secondary);
   border: 1px solid var(--color-border-primary);
-  border-radius: 3px;
   cursor: pointer;
   transition: all 0.2s;
   display: flex;
@@ -235,7 +231,6 @@
   flex: 1;
   min-width: 280px;
   background: var(--color-bg-secondary);
-  border-radius: 4px;
   display: flex;
   flex-direction: column;
   max-height: calc(100vh - 220px);
@@ -248,7 +243,6 @@
   padding: 0.875rem 1rem;
   background: var(--color-bg-primary);
   border-bottom: 2px solid var(--color-border-primary);
-  border-radius: 4px 4px 0 0;
   color: var(--color-text-secondary);
   font-weight: 600;
   font-size: 0.875rem;
@@ -263,7 +257,6 @@
 .column-count {
   background: var(--color-bg-secondary);
   padding: 0.125rem 0.5rem;
-  border-radius: 12px;
   font-size: 0.75rem;
 }
 
@@ -286,7 +279,6 @@
 .board-ticket {
   background: var(--color-bg-primary);
   border: 2px solid var(--color-border-primary);
-  border-radius: 4px;
   padding: 0.875rem;
   cursor: move;
   transition: all 0.2s;
@@ -370,12 +362,25 @@
   border-top: 1px solid var(--color-border-primary);
 }
 
+.ticket-meta-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
 .ticket-meta-small {
   display: flex;
   align-items: center;
   gap: 0.375rem;
   font-size: 0.75rem;
   color: var(--color-text-secondary);
+}
+
+.ticket-meta-small.assignee-badge {
+  color: var(--color-primary);
+  font-weight: 500;
+  background: rgba(16, 185, 129, 0.1);
+  padding: 0.125rem 0.375rem;
 }
 
 .ticket-actions-compact {
@@ -388,7 +393,6 @@
   background: transparent;
   color: var(--color-text-secondary);
   border: none;
-  border-radius: 3px;
   cursor: pointer;
   transition: all 0.2s;
   display: flex;
@@ -409,6 +413,28 @@
   color: #DE350B;
 }
 
+.icon-btn:disabled,
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  color: var(--color-text-secondary);
+}
+
+.icon-btn:disabled:hover,
+.btn-primary:disabled:hover {
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+
+.no-actions {
+  padding: 0.375rem;
+  display: flex;
+  align-items: center;
+  color: var(--color-text-secondary);
+  opacity: 0.6;
+  cursor: default;
+}
+
 .empty-column {
   text-align: center;
   padding: 2rem 1rem;
@@ -427,7 +453,6 @@
 .list-ticket {
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border-primary);
-  border-radius: 4px;
   transition: all 0.2s;
 }
 
@@ -517,7 +542,6 @@
   background: var(--color-bg-secondary);
   border-collapse: collapse;
   border: 1px solid var(--color-border-primary);
-  border-radius: 4px;
   font-size: 0.875rem;
 }
 
@@ -589,7 +613,6 @@
   align-items: center;
   gap: 0.375rem;
   padding: 0.25rem 0.625rem;
-  border-radius: 3px;
   font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -709,7 +732,6 @@
 
 .modal-content {
   background: var(--color-bg-secondary);
-  border-radius: 4px;
   max-width: 640px;
   width: 90%;
   max-height: 90vh;
@@ -745,7 +767,6 @@
   border: none;
   color: var(--color-text-secondary);
   cursor: pointer;
-  border-radius: 3px;
   transition: all 0.2s;
   display: flex;
   align-items: center;
@@ -785,7 +806,6 @@
   padding: 0.625rem 0.75rem;
   background: var(--color-bg-primary);
   border: 2px solid var(--color-border-primary);
-  border-radius: 3px;
   font-size: 0.875rem;
   color: var(--color-text-primary);
   transition: all 0.2s;
@@ -826,7 +846,6 @@
   background: transparent;
   color: var(--color-text-secondary);
   border: 1px solid var(--color-border-primary);
-  border-radius: 3px;
   font-weight: 600;
   font-size: 0.875rem;
   cursor: pointer;
@@ -848,7 +867,6 @@
   background: var(--color-primary);
   color: white;
   border: none;
-  border-radius: 3px;
   font-weight: 600;
   font-size: 0.875rem;
   cursor: pointer;
@@ -1110,7 +1128,6 @@
   background: var(--color-primary);
   color: white;
   border: none;
-  border-radius: 3px;
   font-weight: 600;
   cursor: pointer;
   display: flex;
@@ -1202,7 +1219,6 @@
 
 .chat-message-item {
   padding: 1rem;
-  border-radius: 8px;
   background: var(--color-bg-primary);
   border: 1px solid var(--color-border-primary);
 }
@@ -1255,7 +1271,6 @@
   margin-top: 0.75rem;
   padding: 0.5rem 0.75rem;
   background: rgba(16, 185, 129, 0.1);
-  border-radius: 4px;
   font-size: 0.8125rem;
   color: var(--color-text-secondary);
 }
@@ -1265,7 +1280,6 @@
   padding: 0.75rem;
   background: rgba(16, 185, 129, 0.05);
   border-left: 3px solid var(--color-primary);
-  border-radius: 0 4px 4px 0;
   font-size: 0.875rem;
   color: var(--color-text-secondary);
 }
@@ -1311,7 +1325,6 @@
   background: var(--color-primary);
   color: white;
   border: none;
-  border-radius: 6px;
   font-weight: 600;
   font-size: 0.9375rem;
   cursor: pointer;
@@ -1339,4 +1352,22 @@
   color: var(--color-primary);
   opacity: 0.7;
 }
+
+/* Assignee styling */
+.info-item.assignee {
+  color: var(--color-primary);
+  font-weight: 500;
+}
+
+.user-cell.assignee {
+  color: var(--color-primary);
+  font-weight: 500;
+}
+
+.user-cell.assignee .text-muted {
+  color: var(--color-text-secondary);
+  font-weight: 400;
+  font-style: italic;
+}
+
 

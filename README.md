@@ -17,6 +17,27 @@ AI-powered IT support system for automated ticket handling, troubleshooting, and
 - **Node.js 18+** ([Download](https://nodejs.org/))
 - **Google Gemini API Key** ([Get Free Key](https://makersuite.google.com/app/apikey))
 
+**Install Python via Command Line:**
+```powershell
+# Option 1: Using winget (Windows Package Manager)
+winget install Python.Python.3.11
+
+# Option 2: Using Chocolatey
+choco install python311
+
+# After installation, verify:
+python --version
+```
+
+**Enable PowerShell Script Execution (Optional):**
+```powershell
+# Run this once to allow scripts to run directly:
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+
+# Or run scripts with bypass (no permanent change needed):
+powershell -ExecutionPolicy Bypass -File .\setup.ps1
+```
+
 ## Setup Guide
 
 ### 1. Clone Repository

@@ -7,6 +7,9 @@ import Settings from '../components/Settings'
 import AutomationPage from '../components/AutomationPage'
 import ErrorCodesPage from '../components/ErrorCodesPage'
 import KnowledgeBasePage from '../components/KnowledgeBasePage'
+import UserManagement from '../components/UserManagement'
+import AuditLogs from '../components/AuditLogs'
+import RoleHierarchy from '../components/RoleHierarchy'
 import Login from '../components/Login'
 import Register from '../components/Register'
 import { ROUTES } from './constants'
@@ -51,6 +54,21 @@ export const getAuthenticatedRoutes = (ChatPage) => [
   {
     path: ROUTES.KNOWLEDGE_BASE,
     element: KnowledgeBasePage,
+    requiresAuth: true
+  },
+  {
+    path: ROUTES.USER_MANAGEMENT,
+    element: UserManagement,
+    requiresAuth: true
+  },
+  {
+    path: ROUTES.AUDIT_LOGS,
+    element: AuditLogs,
+    requiresAuth: true
+  },
+  {
+    path: '/role-hierarchy',
+    element: RoleHierarchy,
     requiresAuth: true
   },
   {

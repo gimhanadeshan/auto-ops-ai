@@ -60,13 +60,13 @@
 .user-avatar {
   width: 40px;
   height: 40px;
-  border-radius: 50%;
   background: var(--color-primary);
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
   flex-shrink: 0;
+  border-radius: 50%;
 }
 
 .user-info {
@@ -133,6 +133,20 @@
   flex-shrink: 0;
 }
 
+.nav-item.admin-only {
+  position: relative;
+}
+
+.admin-badge {
+  margin-left: auto;
+  color: var(--color-warning);
+  opacity: 0.7;
+}
+
+.nav-item.admin-only:hover .admin-badge {
+  opacity: 1;
+}
+
 .sidebar-footer {
   padding: var(--space-md);
   border-top: 1px solid var(--color-border-primary);
@@ -197,7 +211,7 @@
   }
 
   .logo-text,
-  .sidebar-user .user-info,
+  .sidebar-user,
   .nav-item span {
     display: none;
   }
@@ -225,3 +239,4 @@
     padding: var(--space-sm);
   }
 }
+

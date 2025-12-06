@@ -16,10 +16,13 @@ import AutomationPage from './components/AutomationPage'
 import ErrorCodesPage from './components/ErrorCodesPage'
 import QuickActionsPage from './components/QuickActionsPage'
 import KnowledgeBasePage from './components/KnowledgeBasePage'
+import UserManagement from './components/UserManagement'
+import AuditLogs from './components/AuditLogs'
 import Login from './components/Login'
 import Register from './components/Register'
 import './styles/App.css'
 import './styles/agent-mode.css'
+import './styles/components/PermissionComponents.css'
 
 function ChatPage({ user }) {
   const location = useLocation()  // Track navigation to detect when coming from tickets
@@ -1090,6 +1093,8 @@ function MainLayout({ user, onLogout }) {
           <Route path="/automation" element={<AutomationPage />} />
           <Route path="/error-codes" element={<ErrorCodesPage />} />
           <Route path="/knowledge-base" element={<KnowledgeBasePage />} />
+          <Route path="/users" element={<UserManagement />} />
+          <Route path="/audit-logs" element={<AuditLogs user={user} />} />
           <Route path="/settings" element={<Settings user={user} />} />
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
         </Routes>
@@ -1101,6 +1106,29 @@ function MainLayout({ user, onLogout }) {
 function App() {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
+
+  // Load primary color on app initialization
+  useEffect(() => {
+    const savedColor = localStorage.getItem('primaryColor')
+    if (savedColor) {
+      const root = document.documentElement
+      root.style.setProperty('--color-primary', savedColor)
+      
+      // Adjust hover color
+      const hexToRgb = (hex) => {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
+        return result ? {
+          r: parseInt(result[1], 16),
+          g: parseInt(result[2], 16),
+          b: parseInt(result[3], 16)
+        } : { r: 20, g: 184, b: 166 }
+      }
+      
+      const rgb = hexToRgb(savedColor)
+      const hoverColor = `rgb(${Math.max(0, rgb.r - 20)}, ${Math.max(0, rgb.g - 20)}, ${Math.max(0, rgb.b - 20)})`
+      root.style.setProperty('--color-primary-hover', hoverColor)
+    }
+  }, [])
 
   useEffect(() => {
     const storedUser = localStorage.getItem(STORAGE_KEYS.USER_DATA)

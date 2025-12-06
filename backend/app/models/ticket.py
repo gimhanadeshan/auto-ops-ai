@@ -67,6 +67,7 @@ class TicketCreate(TicketBase):
     """Schema for creating a ticket."""
     priority: Optional[TicketPriority] = TicketPriority.MEDIUM
     category: Optional[TicketCategory] = TicketCategory.OTHER
+    assigned_to: Optional[str] = None
 
 
 class TicketUpdate(BaseModel):
