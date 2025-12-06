@@ -70,10 +70,10 @@ function TicketList() {
     fetchTickets()
     fetchAssignableUsers()
     
-    // Auto-refresh tickets every 5 seconds to show priority changes
+    // Auto-refresh tickets every 30 seconds to show priority changes
     const interval = setInterval(() => {
       fetchTickets()
-    }, 5000)
+    }, 30000)
     
     return () => clearInterval(interval)
   }, [])
