@@ -49,6 +49,9 @@ class Settings(BaseSettings):
     
     # Logging
     log_level: str = "INFO"
+
+    # Conversation behavior
+    conversation_llm_first: bool = True
     
     def get_allowed_origins_list(self) -> List[str]:
         """Convert the comma-separated string to a list."""
@@ -59,6 +62,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "ignore"  # Ignore extra fields from .env
 
 
 @lru_cache()

@@ -1,10 +1,17 @@
 import os
 import json
+import sys
 from pathlib import Path
+from unittest.mock import MagicMock
+
+# Mock onnxruntime BEFORE importing chromadb to avoid Windows DLL issues
+sys.modules['onnxruntime'] = MagicMock()
+
 from dotenv import load_dotenv
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_chroma import Chroma
-from langchain_core.documents import Document 
+from langchain_core.documents import Document
+import chromadb
 
 # Load environment variables
 load_dotenv()
@@ -13,8 +20,24 @@ load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "models/text-embedding-004")
 CHROMA_DB_DIR = "./data/processed/chroma_db"
+DATA_FILE = "../data/raw/ticketing_system_data_new.json"
 
-# Sample Knowledge Base (Converted to valid Python syntax)
+def load_data_from_file():
+    """Load data from JSON file"""
+    data_path = Path(__file__).parent / DATA_FILE
+    print(f"📂 Loading data from {data_path}...")
+    
+    if not data_path.exists():
+        print(f"❌ Error: Data file not found at {data_path}")
+        return None
+    
+    with open(data_path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    
+    print(f"✅ Data loaded successfully!")
+    return data
+
+# Sample Knowledge Base (Converted to valid Python syntax) - Fallback if JSON not available
 KNOWLEDGE_BASE = [
     {
    "users":[
@@ -682,49 +705,145 @@ def ingest_data():
     
     if not GOOGLE_API_KEY:
         print("❌ Error: GOOGLE_API_KEY not found in .env")
-        return
+        return False
 
-    # 1. Prepare Documents
-    documents = []
-    kb_items = KNOWLEDGE_BASE[0]["knowledge_base"]
+    # 1. Load data from JSON file
+    data = load_data_from_file()
+    if not data:
+        print("⚠️  Using fallback knowledge base...")
+        data = KNOWLEDGE_BASE[0]
     
+    # 2. Prepare Documents from Knowledge Base
+    documents = []
+    kb_items = data.get("knowledge_base", [])
+    
+    print(f"📚 Processing {len(kb_items)} knowledge base articles...")
     for item in kb_items:
         # Create a rich content string for better retrieval
         content_str = f"""
-        Title: {item['title']}
-        Category: {item['category']}
-        Issue Pattern: {item['issue_pattern']}
-        Summary: {item['summary']}
-        Resolution Steps: {json.dumps(item['resolution_steps'])}
-        """
+Title: {item['title']}
+Category: {item['category']}
+Issue Pattern: {item['issue_pattern']}
+Summary: {item['summary']}
+Resolution Steps:
+{chr(10).join(f"  {i+1}. {step}" for i, step in enumerate(item['resolution_steps']))}
+"""
         
         doc = Document(
             page_content=content_str.strip(),
             metadata={
-                "source": item["title"], 
-                "id": item["id"],
-                "category": item["category"]
+                "source": "knowledge_base",
+                "kb_id": item["id"],
+                "title": item["title"],
+                "category": item["category"],
+                "type": "knowledge_base"
             }
         )
         documents.append(doc)
     
-    print(f"📄 Prepared {len(documents)} documents for ingestion.")
+    # 3. Add ticket conversations for context
+    conversations = data.get("ticket_conversations", [])
+    print(f"💬 Processing {len(conversations)} ticket conversations...")
     
-    # 2. Initialize Embeddings
+    for conv in conversations:
+        ticket_id = conv.get("ticket_id")
+        messages = conv.get("conversation", [])
+        
+        # Build conversation text
+        conv_text = f"Ticket ID: {ticket_id}\n\n"
+        for msg in messages:
+            sender = msg.get("sender_name", "Unknown")
+            message = msg.get("message", "")
+            conv_text += f"{sender}: {message}\n"
+        
+        # Add events if available
+        events = conv.get("events", [])
+        if events:
+            conv_text += "\nEvents:\n"
+            for event in events:
+                event_type = event.get("event_type", "")
+                event_msg = event.get("message", "")
+                conv_text += f"  - {event_type}: {event_msg}\n"
+        
+        doc = Document(
+            page_content=conv_text.strip(),
+            metadata={
+                "source": "ticket_conversation",
+                "ticket_id": ticket_id,
+                "type": "conversation"
+            }
+        )
+        documents.append(doc)
+    
+    # 4. Add tickets for retrieval
+    tickets = data.get("tickets", [])
+    print(f"🎫 Processing {len(tickets)} tickets...")
+    
+    for ticket in tickets:
+        ticket_text = f"""
+Ticket ID: {ticket.get('id')}
+Title: {ticket.get('title')}
+User: {ticket.get('user_name')}
+Description: {ticket.get('description')}
+Priority: {ticket.get('priority')}
+Status: {ticket.get('status')}
+Category: {ticket.get('category')}
+Urgency: {ticket.get('urgency')}
+Knowledge Base: {ticket.get('knowledge_base_id', 'N/A')}
+"""
+        
+        doc = Document(
+            page_content=ticket_text.strip(),
+            metadata={
+                "source": "ticket",
+                "ticket_id": ticket.get("id"),
+                "user_id": ticket.get("user_id"),
+                "category": ticket.get("category"),
+                "status": ticket.get("status"),
+                "priority": ticket.get("priority"),
+                "type": "ticket"
+            }
+        )
+        documents.append(doc)
+    
+    print(f"📄 Prepared {len(documents)} total documents for ingestion.")
+    
+    # 5. Initialize Embeddings
+    print("🔧 Initializing embeddings model...")
     embeddings = GoogleGenerativeAIEmbeddings(
         model=EMBEDDING_MODEL,
         google_api_key=GOOGLE_API_KEY
     )
 
-    # 3. Create/Update Vector Store
-    print(f"💾 Saving to {CHROMA_DB_DIR}...")
+    # 6. Create/Update Vector Store
+    db_path = Path(__file__).parent / CHROMA_DB_DIR
+    print(f"💾 Creating vector database at {db_path}...")
+    
+    # Remove old database if exists
+    if db_path.exists():
+        import shutil
+        shutil.rmtree(db_path)
+        print("🗑️  Removed old database")
+    
+    # Create ChromaDB client with settings to avoid ONNX runtime
+    chroma_client = chromadb.PersistentClient(
+        path=str(db_path)
+    )
+    
     vector_store = Chroma.from_documents(
         documents=documents,
         embedding=embeddings,
-        persist_directory=str(CHROMA_DB_DIR)
+        client=chroma_client,
+        persist_directory=str(db_path)
     )
     
-    print("✅ Ingestion complete! Database created.")
+    print(f"✅ Ingestion complete! Created vector database with {len(documents)} documents.")
+    print(f"   - Knowledge Base Articles: {len(kb_items)}")
+    print(f"   - Ticket Conversations: {len(conversations)}")
+    print(f"   - Tickets: {len(tickets)}")
+    return True
 
 if __name__ == "__main__":
-    ingest_data()
+    success = ingest_data()
+    if not success:
+        exit(1)

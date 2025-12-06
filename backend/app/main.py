@@ -9,6 +9,7 @@ from app.config import get_settings
 from app.core.database import init_db
 from app.core.logging_config import setup_logging, get_logger
 import importlib
+from app.api.endpoints import prediction_monitoring
 # Importing API endpoint modules lazily later so missing optional packages
 # (e.g. langchain) won't prevent the app from starting during development.
 
@@ -31,6 +32,12 @@ async def lifespan(app: FastAPI):
     # Initialize database
     logger.info("Initializing database...")
     try:
+        # Import models to ensure they're registered with Base
+        from app.models.ticket import TicketDB
+        from app.models.user import UserDB
+        from app.models.chat_history import ChatMessageDB
+        from app.models.audit_log import AuditLogDB
+        
         init_db()
         logger.info("Database initialized successfully")
     except Exception as e:
@@ -93,11 +100,14 @@ try:
         prefix=f"{settings.api_prefix}",
         tags=["Status"]
     )
+    app.include_router(prediction_monitoring.router, 
+                       prefix=f"{settings.api_prefix}/prediction_monitoring")
 except Exception as e:
     logger.warning(f"Could not include status endpoint at startup: {e}")
 
 # Import other endpoints individually so optional heavy dependencies don't break startup
-for _name, _tag in (("auth", "Authentication"), ("chat", "Chat"), ("tickets", "Tickets"), ("dashboard", "Dashboard"), ("monitoring", "Monitoring")):
+# Use chat_enhanced (LLM-First with intelligent RAG) for the main chat
+for _name, _tag in (("auth", "Authentication"), ("chat_enhanced", "Chat"), ("tickets", "Tickets"), ("dashboard", "Dashboard"), ("monitoring", "Monitoring"),("admin", "Admin"), ("prediction_monitoring", "Predictions")):
     try:
         mod = importlib.import_module(f"app.api.endpoints.{_name}")
         # Monitoring endpoint gets its own prefix path
@@ -105,6 +115,12 @@ for _name, _tag in (("auth", "Authentication"), ("chat", "Chat"), ("tickets", "T
             app.include_router(
                 mod.router,
                 prefix=f"{settings.api_prefix}/monitoring",
+                tags=[_tag]
+            )
+        elif _name == "admin":
+            app.include_router(
+                mod.router,
+                prefix=f"{settings.api_prefix}/admin",
                 tags=[_tag]
             )
         else:
