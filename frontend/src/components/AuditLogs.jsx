@@ -186,7 +186,6 @@ function AuditLogs({ user }) {
     <div className="audit-logs">
       <div className="page-header">
         <div className="header-content">
-          <Shield className="header-icon" size={32} />
           <div>
             <h1>Audit Logs</h1>
             <p>Track user actions and system events</p>
@@ -297,57 +296,47 @@ function AuditLogs({ user }) {
             <p>Loading audit logs...</p>
           </div>
         ) : (
-          <div className="logs-list">
-            {filteredLogs.map((log, index) => (
-              <div key={index} className={`log-entry ${getSuccessClass(log.success)}`}>
-                <div className="log-header">
-                  <div className="log-action">
-                    {getActionIcon(log.action)}
-                    <span className="action-name">{log.action}</span>
-                  </div>
-                  <div className="log-time">
-                    <Clock size={14} />
-                    {formatTimestamp(log.timestamp)}
-                  </div>
-                </div>
-
-                <div className="log-body">
-                  <div className="log-info">
-                    <span className="log-label">User:</span>
-                    <span className="log-value">{log.user_email}</span>
-                  </div>
-                  <div className="log-info">
-                    <span className="log-label">Resource:</span>
-                    <span className="log-value">
-                      {log.resource_type}
-                      {log.resource_id && ` #${log.resource_id}`}
+          <table className="logs-table">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>User</th>
+                <th>Action</th>
+                <th>Resource</th>
+                <th>Status</th>
+                <th>IP Address</th>
+                <th>Details</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredLogs.map((log, index) => (
+                <tr key={index} className={`log-row ${getSuccessClass(log.success)}`}>
+                  <td>{formatTimestamp(log.timestamp)}</td>
+                  <td>{log.user_email}</td>
+                  <td>
+                    <div className="log-action">
+                      {getActionIcon(log.action)}
+                      <span>{log.action}</span>
+                    </div>
+                  </td>
+                  <td>
+                    {log.resource_type}
+                    {log.resource_id && ` #${log.resource_id}`}
+                  </td>
+                  <td>
+                    <span className={`status-badge ${getSuccessClass(log.success)}`}>
+                      {log.success === 'success' && <CheckCircle size={14} />}
+                      {log.success === 'failed' && <XCircle size={14} />}
+                      {log.success === 'denied' && <AlertCircle size={14} />}
+                      {log.success}
                     </span>
-                  </div>
-                  {log.ip_address && (
-                    <div className="log-info">
-                      <span className="log-label">IP:</span>
-                      <span className="log-value">{log.ip_address}</span>
-                    </div>
-                  )}
-                  {log.details && (
-                    <div className="log-details">
-                      <span className="log-label">Details:</span>
-                      <span className="log-value">{log.details}</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="log-footer">
-                  <span className={`status-badge ${getSuccessClass(log.success)}`}>
-                    {log.success === 'success' && <CheckCircle size={14} />}
-                    {log.success === 'failed' && <XCircle size={14} />}
-                    {log.success === 'denied' && <AlertCircle size={14} />}
-                    {log.success}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
+                  </td>
+                  <td>{log.ip_address || '-'}</td>
+                  <td>{log.details || '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
 
         {!loading && filteredLogs.length === 0 && (

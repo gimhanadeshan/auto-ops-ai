@@ -16,9 +16,14 @@ import {
 } from 'lucide-react'
 import { ticketService } from '../services/ticketService'
 import { API_PRIORITY_TO_NUMBER, TICKET_PRIORITY_LABELS } from '../config/constants'
+import { usePermissions } from '../hooks/usePermissions'
+import PermissionGate from './PermissionGate'
+import { PERMISSIONS } from '../utils/permissionUtils'
 import '../styles/components/Dashboard.css'
 
 function Dashboard({ user }) {
+  const { hasPermission, hasAnyPermission, getRoleInfo } = usePermissions();
+  
   const [stats, setStats] = useState({
     totalTickets: 0,
     openTickets: 0,
@@ -148,128 +153,154 @@ function Dashboard({ user }) {
       <div className="dashboard-header">
         <div>
           <h1>Welcome back, {user?.name || 'User'}!</h1>
-          <p>Here's what's happening with your IT support system today.</p>
+          <p className="role-badge" style={{ color: getRoleInfo().color }}>
+            {getRoleInfo().label}
+          </p>
         </div>
-        <Link to="/chat" className="quick-action-btn">
-          <MessageSquare size={20} />
-          <span>Start New Chat</span>
-        </Link>
+        <PermissionGate permissions={[PERMISSIONS.TICKET_CREATE]}>
+          <Link to="/chat" className="quick-action-btn">
+            <MessageSquare size={20} />
+            <span>Start New Chat</span>
+          </Link>
+        </PermissionGate>
       </div>
 
+      {/* Stats Grid - Show basic stats for all authenticated users */}
       <div className="stats-grid">
-        <StatCard
-          title="Total Tickets"
-          value={stats.totalTickets}
-          icon={FileText}
-          trend={stats.totalTickets > 0 ? "up" : null}
-          trendValue={stats.totalTrend}
-          color="blue"
-        />
-        <StatCard
-          title="Open Tickets"
-          value={stats.openTickets}
-          icon={Clock}
-          color="orange"
-        />
-        <StatCard
-          title="Resolved Tickets"
-          value={stats.resolvedTickets}
-          icon={CheckCircle}
-          trend={stats.resolvedToday > 0 ? "up" : null}
-          trendValue={`${stats.resolvedToday} today`}
-          color="green"
-        />
-        <StatCard
-          title="Critical"
-          value={stats.escalatedTickets}
-          icon={AlertCircle}
-          trend={stats.escalatedTickets === 0 ? "down" : null}
-          trendValue={stats.escalatedTickets === 0 ? "None" : null}
-          color="red"
-        />
+        {hasAnyPermission([PERMISSIONS.TICKET_VIEW_OWN, PERMISSIONS.TICKET_VIEW_TEAM, PERMISSIONS.TICKET_VIEW_ALL]) && (
+          <>
+            <StatCard
+              title="Total Tickets"
+              value={stats.totalTickets}
+              icon={FileText}
+              trend={stats.totalTickets > 0 ? "up" : null}
+              trendValue={stats.totalTrend}
+              color="blue"
+            />
+            <StatCard
+              title="Open Tickets"
+              value={stats.openTickets}
+              icon={Clock}
+              color="orange"
+            />
+            <StatCard
+              title="Resolved Tickets"
+              value={stats.resolvedTickets}
+              icon={CheckCircle}
+              trend={stats.resolvedToday > 0 ? "up" : null}
+              trendValue={`${stats.resolvedToday} today`}
+              color="green"
+            />
+          </>
+        )}
+        {hasAnyPermission([PERMISSIONS.TICKET_VIEW_ALL, PERMISSIONS.TICKET_ESCALATE]) && (
+          <StatCard
+            title="Critical"
+            value={stats.escalatedTickets}
+            icon={AlertCircle}
+            trend={stats.escalatedTickets === 0 ? "down" : null}
+            trendValue={stats.escalatedTickets === 0 ? "None" : null}
+            color="red"
+          />
+        )}
       </div>
 
       <div className="dashboard-content">
-        <div className="content-section">
-          <div className="section-header">
-            <h2>Recent Issues</h2>
-            <Link to="/tickets" className="view-all-link">
-              View All <ArrowRight size={16} />
-            </Link>
-          </div>
-          <div className="issues-list">
-            {recentIssues.length === 0 ? (
-              <div className="empty-state">
-                <p>No recent tickets</p>
-              </div>
-            ) : (
-              recentIssues.map((issue) => (
-                <div key={issue.id} className="issue-item">
-                  <div className="issue-info">
-                    <span className="issue-id">#{issue.id}</span>
-                    <span className="issue-title">{issue.title}</span>
-                  </div>
-                  <div className="issue-meta">
-                    <span className={`priority-badge ${typeof issue.priority === 'string' ? issue.priority : 'medium'}`}>
-                      {getPriorityLabel(issue.priority)}
-                    </span>
-                    <span className={`status-badge ${issue.status}`}>
-                      {issue.status.replace('_', ' ')}
-                    </span>
-                    <span className="issue-time">{issue.time}</span>
-                  </div>
+        {/* Recent Issues - Only for users who can view tickets */}
+        <PermissionGate permissions={[PERMISSIONS.TICKET_VIEW_OWN, PERMISSIONS.TICKET_VIEW_TEAM, PERMISSIONS.TICKET_VIEW_ALL]}>
+          <div className="content-section">
+            <div className="section-header">
+              <h2>Recent Issues</h2>
+              <Link to="/tickets" className="view-all-link">
+                View All <ArrowRight size={16} />
+              </Link>
+            </div>
+            <div className="issues-list">
+              {recentIssues.length === 0 ? (
+                <div className="empty-state">
+                  <p>No recent tickets</p>
                 </div>
-              ))
-            )}
+              ) : (
+                recentIssues.map((issue) => (
+                  <div key={issue.id} className="issue-item">
+                    <div className="issue-info">
+                      <span className="issue-id">#{issue.id}</span>
+                      <span className="issue-title">{issue.title}</span>
+                    </div>
+                    <div className="issue-meta">
+                      <span className={`priority-badge ${typeof issue.priority === 'string' ? issue.priority : 'medium'}`}>
+                        {getPriorityLabel(issue.priority)}
+                      </span>
+                      <span className={`status-badge ${issue.status}`}>
+                        {issue.status.replace('_', ' ')}
+                      </span>
+                      <span className="issue-time">{issue.time}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
-        </div>
+        </PermissionGate>
 
-        <div className="content-section">
-          <div className="section-header">
-            <h2>System Status</h2>
-            <Link to="/monitoring" className="view-all-link">
-              View Details <ArrowRight size={16} />
-            </Link>
-          </div>
-          <div className="system-status-list">
-            {systemStatus.map((service, idx) => (
-              <div key={idx} className="status-item">
-                <div className="status-info">
-                  <Server size={18} />
-                  <span className="service-name">{service.name}</span>
+        {/* System Status - Only for support staff and admins */}
+        <PermissionGate permissions={[PERMISSIONS.SYSTEM_MONITOR]}>
+          <div className="content-section">
+            <div className="section-header">
+              <h2>System Status</h2>
+              <Link to="/monitoring" className="view-all-link">
+                View Details <ArrowRight size={16} />
+              </Link>
+            </div>
+            <div className="system-status-list">
+              {systemStatus.map((service, idx) => (
+                <div key={idx} className="status-item">
+                  <div className="status-info">
+                    <Server size={18} />
+                    <span className="service-name">{service.name}</span>
+                  </div>
+                  <div className="status-details">
+                    <span className="uptime">Uptime: {service.uptime}</span>
+                    <span className={`status-indicator ${service.status}`}>
+                      <span className="status-dot"></span>
+                      {service.status}
+                    </span>
+                  </div>
                 </div>
-                <div className="status-details">
-                  <span className="uptime">Uptime: {service.uptime}</span>
-                  <span className={`status-indicator ${service.status}`}>
-                    <span className="status-dot"></span>
-                    {service.status}
-                  </span>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
+        </PermissionGate>
       </div>
 
+      {/* Quick Actions - Permission-based */}
       <div className="quick-actions-panel">
         <h2>Quick Navigation</h2>
         <div className="actions-grid">
-          <Link to="/chat" className="action-card">
-            <MessageSquare size={28} />
-            <span>Report Issue</span>
-          </Link>
-          <Link to="/tickets" className="action-card">
-            <FileText size={28} />
-            <span>View Tickets</span>
-          </Link>
-          <Link to="/monitoring" className="action-card">
-            <Activity size={28} />
-            <span>System Monitor</span>
-          </Link>
-          <Link to="/reports" className="action-card">
-            <Zap size={28} />
-            <span>View Reports</span>
-          </Link>
+          {hasAnyPermission([PERMISSIONS.TICKET_CREATE, PERMISSIONS.TROUBLESHOOT_RUN]) && (
+            <Link to="/chat" className="action-card">
+              <MessageSquare size={28} />
+              <span>Report Issue</span>
+            </Link>
+          )}
+          {hasAnyPermission([PERMISSIONS.TICKET_VIEW_OWN, PERMISSIONS.TICKET_VIEW_TEAM, PERMISSIONS.TICKET_VIEW_ALL]) && (
+            <Link to="/tickets" className="action-card">
+              <FileText size={28} />
+              <span>View Tickets</span>
+            </Link>
+          )}
+          {hasPermission(PERMISSIONS.SYSTEM_MONITOR) && (
+            <Link to="/monitoring" className="action-card">
+              <Activity size={28} />
+              <span>System Monitor</span>
+            </Link>
+          )}
+          {hasPermission(PERMISSIONS.REPORTS_VIEW) && (
+            <Link to="/reports" className="action-card">
+              <Zap size={28} />
+              <span>View Reports</span>
+            </Link>
+          )}
         </div>
       </div>
     </div>

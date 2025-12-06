@@ -19,6 +19,7 @@ import AuditLogs from './components/AuditLogs'
 import Login from './components/Login'
 import Register from './components/Register'
 import './styles/App.css'
+import './styles/components/PermissionComponents.css'
 
 function ChatPage({ user }) {
   const location = useLocation()  // Track navigation to detect when coming from tickets

@@ -61,10 +61,10 @@ async def login(
             data={"sub": user.email, "user_id": user.id}
         )
         
-        # Return token and user info
+        # Return token and user info with permissions
         return Token(
             access_token=access_token,
-            user=UserResponse.from_orm(user)
+            user=UserResponse.from_db(user)
         )
         
     except HTTPException:
@@ -83,7 +83,7 @@ async def get_current_user(
     db: Session = Depends(get_db)
 ):
     """
-    Get current user information.
+    Get current user information with permissions.
     """
     user = auth_service.get_user_by_email(db, email)
     if not user:
@@ -91,4 +91,4 @@ async def get_current_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
         )
-    return user
+    return UserResponse.from_db(user)

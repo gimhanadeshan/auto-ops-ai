@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, RefreshCw, AlertCircle, Zap, CheckCircle, Clock, XCircle, Loader, Plus, X, Edit2, Trash2, Search, Filter, LayoutGrid, List, Table, User, Calendar, Tag, MessageSquare, History, ChevronRight, Bot, PlayCircle } from 'lucide-react'
+import { ArrowLeft, RefreshCw, AlertCircle, Zap, CheckCircle, Clock, XCircle, Loader, Plus, X, Edit2, Trash2, Search, Filter, LayoutGrid, List, Table, User, Calendar, Tag, MessageSquare, History, ChevronRight, Bot, PlayCircle, Lock } from 'lucide-react'
 import { ticketService } from '../services/ticketService'
 import { getTicketChatHistory, resumeChatSession } from '../api'
+import { usePermissions } from '../hooks/usePermissions'
 import { 
   TICKET_PRIORITY, 
   TICKET_PRIORITY_LABELS, 
@@ -18,6 +19,7 @@ import '../styles/components/TicketList.css'
 
 function TicketList() {
   const navigate = useNavigate()
+  const { hasPermission, hasRole, user } = usePermissions()
   
   // Get initial user email
   const getUserEmail = () => {
@@ -51,7 +53,7 @@ function TicketList() {
     priority: TICKET_PRIORITY.MEDIUM,
     category: TICKET_CATEGORY.OTHER,
     user_email: getUserEmail(),
-    assignee: ''
+    assigned_to: ''
   })
   
   // Chat history panel state
@@ -60,8 +62,13 @@ function TicketList() {
   const [chatHistory, setChatHistory] = useState([])
   const [loadingChatHistory, setLoadingChatHistory] = useState(false)
 
+  // Assignable users state
+  const [assignableUsers, setAssignableUsers] = useState([])
+  const [loadingAssignableUsers, setLoadingAssignableUsers] = useState(false)
+
   useEffect(() => {
     fetchTickets()
+    fetchAssignableUsers()
     
     // Auto-refresh tickets every 5 seconds to show priority changes
     const interval = setInterval(() => {
@@ -74,13 +81,33 @@ function TicketList() {
   const fetchTickets = async () => {
     try {
       setLoading(true)
+      const token = localStorage.getItem('token')
+      console.log('🎫 Token available for tickets:', token ? 'YES' : 'NO')
       const data = await ticketService.getAll()
       setTickets(data)
       setError(null)
     } catch (err) {
+      console.error('❌ Error fetching tickets:', err)
       setError(err.message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchAssignableUsers = async () => {
+    try {
+      setLoadingAssignableUsers(true)
+      const token = localStorage.getItem('token')
+      console.log('🎫 Token available for users:', token ? 'YES' : 'NO')
+      const { getAssignableUsers } = await import('../services/userService')
+      const users = await getAssignableUsers()
+      console.log('Assignable users loaded:', users)
+      setAssignableUsers(users)
+    } catch (err) {
+      console.error('Failed to fetch assignable users:', err)
+      setAssignableUsers([])
+    } finally {
+      setLoadingAssignableUsers(false)
     }
   }
 
@@ -137,6 +164,74 @@ function TicketList() {
     return date.toLocaleDateString()
   }
 
+  const getRoleDisplayName = (role) => {
+    const roleMap = {
+      'system_admin': 'System Admin',
+      'it_admin': 'IT Admin',
+      'support_l1': 'IT Support L1',
+      'support_l2': 'IT Support L2',
+      'support_l3': 'IT Support L3',
+      'manager': 'Manager',
+      'staff': 'Staff',
+      'contractor': 'Contractor'
+    }
+    return roleMap[role] || role
+  }
+
+  const formatUserForDisplay = (user) => {
+    const roleName = getRoleDisplayName(user.role)
+    const teamInfo = user.department ? ` (${user.department} Team)` : ''
+    return `${user.name} - ${roleName}${teamInfo}`
+  }
+
+  const getAssigneeName = (assigneeEmail) => {
+    if (!assigneeEmail) return 'Unassigned'
+    const user = assignableUsers.find(u => u.email === assigneeEmail)
+    if (user) {
+      return user.name || user.email
+    }
+    return assigneeEmail
+  }
+
+  // Permission-based action checks
+  const canViewChatHistory = () => {
+    return hasPermission('ticket:view:own') || hasPermission('ticket:view:team') || hasPermission('ticket:view:all')
+  }
+
+  const canEditTicket = (ticket) => {
+    // Check if user can edit their own ticket
+    if (user?.email === ticket.user_email && hasPermission('ticket:update:own')) {
+      return true
+    }
+    // Check if user can edit any ticket (support staff, admin)
+    if (hasPermission('ticket:update:any')) {
+      return true
+    }
+    // Manager can edit team member tickets
+    if (user && hasRole('manager') && hasPermission('ticket:update:own')) {
+      // In a real scenario, we'd check if the ticket belongs to the manager's team
+      // For now, we allow if they're a manager
+      return true
+    }
+    return false
+  }
+
+  const canDeleteTicket = (ticket) => {
+    // Check if user can delete their own ticket
+    if (user?.email === ticket.user_email && hasPermission('ticket:delete:own')) {
+      return true
+    }
+    // Check if user can delete any ticket (admin)
+    if (hasPermission('ticket:delete:any')) {
+      return true
+    }
+    return false
+  }
+
+  const canAssignTicket = () => {
+    return hasPermission('ticket:assign')
+  }
+
   const handleCreateTicket = async (e) => {
     e.preventDefault()
     setCreating(true)
@@ -155,7 +250,8 @@ function TicketList() {
         description: '',
         priority: TICKET_PRIORITY.MEDIUM,
         category: TICKET_CATEGORY.OTHER,
-        user_email: getUserEmail()
+        user_email: getUserEmail(),
+        assigned_to: ''
       })
     } catch (err) {
       alert('Error creating ticket: ' + err.message)
@@ -172,7 +268,8 @@ function TicketList() {
       priority: API_PRIORITY_TO_NUMBER[ticket.priority] || TICKET_PRIORITY.MEDIUM,
       category: ticket.category || TICKET_CATEGORY.OTHER,
       status: ticket.status || TICKET_STATUS.OPEN,
-      user_email: ticket.user_email
+      user_email: ticket.user_email,
+      assigned_to: ticket.assigned_to || ''
     })
     setShowEditModal(true)
   }
@@ -188,7 +285,8 @@ function TicketList() {
         priority: TICKET_PRIORITY_TO_API[formData.priority],
         category: formData.category,
         status: formData.status,
-        user_email: formData.user_email
+        user_email: formData.user_email,
+        assigned_to: formData.assigned_to || null
       }
       await ticketService.update(editingTicket.id, ticketData)
       await fetchTickets()
@@ -201,7 +299,8 @@ function TicketList() {
         priority: TICKET_PRIORITY.MEDIUM,
         category: TICKET_CATEGORY.OTHER,
         status: TICKET_STATUS.OPEN,
-        user_email: getUserEmail()
+        user_email: getUserEmail(),
+        assigned_to: ''
       })
     } catch (err) {
       alert('Error updating ticket: ' + err.message)
@@ -422,17 +521,41 @@ function TicketList() {
                     </div>
                     <h4 className="board-ticket-title">{ticket.title}</h4>
                     <div className="board-ticket-footer">
-                      <div className="ticket-meta-small">
-                        <User size={12} />
-                        <span>{ticket.user_email.split('@')[0]}</span>
+                      <div className="ticket-meta-section">
+                        <div className="ticket-meta-small">
+                          <User size={12} />
+                          <span>{ticket.user_email.split('@')[0]}</span>
+                        </div>
+                        {ticket.assigned_to && (
+                          <div className="ticket-meta-small assignee-badge">
+                            <User size={12} />
+                            <span title={getAssigneeName(ticket.assigned_to)}>
+                              {getAssigneeName(ticket.assigned_to)}
+                            </span>
+                          </div>
+                        )}
                       </div>
                       <div className="ticket-actions-compact">
-                        <button onClick={() => handleViewChatHistory(ticket)} className="icon-btn" title="View chat history">
-                          <History size={14} />
-                        </button>
-                        <button onClick={() => handleEditTicket(ticket)} className="icon-btn">
-                          <Edit2 size={14} />
-                        </button>
+                        {canViewChatHistory() && (
+                          <button onClick={() => handleViewChatHistory(ticket)} className="icon-btn" title="View chat history">
+                            <History size={14} />
+                          </button>
+                        )}
+                        {canEditTicket(ticket) && (
+                          <button onClick={() => handleEditTicket(ticket)} className="icon-btn">
+                            <Edit2 size={14} />
+                          </button>
+                        )}
+                        {canDeleteTicket(ticket) && (
+                          <button onClick={() => handleDeleteTicket(ticket.id)} className="icon-btn delete">
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                        {!canViewChatHistory() && !canEditTicket(ticket) && !canDeleteTicket(ticket) && (
+                          <span className="no-actions" title="No actions available">
+                            <Lock size={14} />
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -489,23 +612,40 @@ function TicketList() {
               <div className="list-ticket-info">
                 <div className="info-item">
                   <User size={14} />
-                  <span>{ticket.user_email.split('@')[0]}</span>
+                  <span>Reporter: {ticket.user_email.split('@')[0]}</span>
                 </div>
+                {ticket.assigned_to && (
+                  <div className="info-item assignee">
+                    <User size={14} />
+                    <span>Assignee: {getAssigneeName(ticket.assigned_to)}</span>
+                  </div>
+                )}
                 <div className="info-item">
                   <Calendar size={14} />
                   <span>{formatDate(ticket.created_at)}</span>
                 </div>
               </div>
               <div className="list-ticket-actions">
-                <button onClick={() => handleViewChatHistory(ticket)} className="icon-btn" title="View chat history">
-                  <History size={16} />
-                </button>
-                <button onClick={() => handleEditTicket(ticket)} className="icon-btn">
-                  <Edit2 size={16} />
-                </button>
-                <button onClick={() => handleDeleteTicket(ticket.id)} className="icon-btn delete">
-                  <Trash2 size={16} />
-                </button>
+                {canViewChatHistory() && (
+                  <button onClick={() => handleViewChatHistory(ticket)} className="icon-btn" title="View chat history">
+                    <History size={16} />
+                  </button>
+                )}
+                {canEditTicket(ticket) && (
+                  <button onClick={() => handleEditTicket(ticket)} className="icon-btn">
+                    <Edit2 size={16} />
+                  </button>
+                )}
+                {canDeleteTicket(ticket) && (
+                  <button onClick={() => handleDeleteTicket(ticket.id)} className="icon-btn delete">
+                    <Trash2 size={16} />
+                  </button>
+                )}
+                {!canViewChatHistory() && !canEditTicket(ticket) && !canDeleteTicket(ticket) && (
+                  <span className="no-actions" title="No actions available">
+                    <Lock size={16} />
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -526,6 +666,7 @@ function TicketList() {
             <th>Priority</th>
             <th>Category</th>
             <th>Reporter</th>
+            <th>Assignee</th>
             <th>Created</th>
             <th>Actions</th>
           </tr>
@@ -568,18 +709,41 @@ function TicketList() {
                     <span>{ticket.user_email.split('@')[0]}</span>
                   </div>
                 </td>
+                <td>
+                  <div className="user-cell assignee">
+                    {ticket.assigned_to ? (
+                      <>
+                        <User size={14} />
+                        <span>{getAssigneeName(ticket.assigned_to)}</span>
+                      </>
+                    ) : (
+                      <span className="text-muted">Unassigned</span>
+                    )}
+                  </div>
+                </td>
                 <td>{formatDate(ticket.created_at)}</td>
                 <td>
                   <div className="table-actions">
-                    <button onClick={() => handleViewChatHistory(ticket)} className="icon-btn" title="View chat history">
-                      <History size={14} />
-                    </button>
-                    <button onClick={() => handleEditTicket(ticket)} className="icon-btn">
-                      <Edit2 size={14} />
-                    </button>
-                    <button onClick={() => handleDeleteTicket(ticket.id)} className="icon-btn delete">
-                      <Trash2 size={14} />
-                    </button>
+                    {canViewChatHistory() && (
+                      <button onClick={() => handleViewChatHistory(ticket)} className="icon-btn" title="View chat history">
+                        <History size={14} />
+                      </button>
+                    )}
+                    {canEditTicket(ticket) && (
+                      <button onClick={() => handleEditTicket(ticket)} className="icon-btn">
+                        <Edit2 size={14} />
+                      </button>
+                    )}
+                    {canDeleteTicket(ticket) && (
+                      <button onClick={() => handleDeleteTicket(ticket.id)} className="icon-btn delete">
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                    {!canViewChatHistory() && !canEditTicket(ticket) && !canDeleteTicket(ticket) && (
+                      <span className="no-actions" title="No actions available">
+                        <Lock size={14} />
+                      </span>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -603,10 +767,17 @@ function TicketList() {
           </div>
         </div>
         <div className="jira-header-right">
-          <button onClick={() => setShowCreateModal(true)} className="btn-primary">
-            <Plus size={18} />
-            <span>Create</span>
-          </button>
+          {hasPermission('ticket:create') ? (
+            <button onClick={() => setShowCreateModal(true)} className="btn-primary">
+              <Plus size={18} />
+              <span>Create</span>
+            </button>
+          ) : (
+            <button disabled className="btn-primary" title="You don't have permission to create tickets">
+              <Lock size={18} />
+              <span>Create</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -770,13 +941,28 @@ function TicketList() {
                 </div>
                 <div className="form-group">
                   <label htmlFor="assignee">Assignee</label>
-                  <input
-                    id="assignee"
-                    type="text"
-                    value={formData.assignee}
-                    onChange={(e) => setFormData({...formData, assignee: e.target.value})}
-                    placeholder="Assign to..."
-                  />
+                  {canAssignTicket() ? (
+                    <select
+                      id="assignee"
+                      value={formData.assigned_to}
+                      onChange={(e) => setFormData({...formData, assigned_to: e.target.value})}
+                    >
+                      <option value="">Unassigned</option>
+                      {loadingAssignableUsers ? (
+                        <option disabled>Loading users...</option>
+                      ) : (
+                        assignableUsers.map(user => (
+                          <option key={user.id} value={user.email}>
+                            {formatUserForDisplay(user)}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  ) : (
+                    <select id="assignee" disabled>
+                      <option>No permission to assign</option>
+                    </select>
+                  )}
                 </div>
               </div>
               <div className="form-actions">
@@ -884,13 +1070,28 @@ function TicketList() {
                 </div>
                 <div className="form-group">
                   <label htmlFor="edit-assignee">Assignee</label>
-                  <input
-                    id="edit-assignee"
-                    type="text"
-                    value={formData.assignee || ''}
-                    onChange={(e) => setFormData({...formData, assignee: e.target.value})}
-                    placeholder="Assign to..."
-                  />
+                  {canAssignTicket() ? (
+                    <select
+                      id="edit-assignee"
+                      value={formData.assigned_to || ''}
+                      onChange={(e) => setFormData({...formData, assigned_to: e.target.value})}
+                    >
+                      <option value="">Unassigned</option>
+                      {loadingAssignableUsers ? (
+                        <option disabled>Loading users...</option>
+                      ) : (
+                        assignableUsers.map(user => (
+                          <option key={user.id} value={user.email}>
+                            {formatUserForDisplay(user)}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  ) : (
+                    <select id="edit-assignee" disabled>
+                      <option>No permission to assign</option>
+                    </select>
+                  )}
                 </div>
               </div>
               <div className="form-actions">

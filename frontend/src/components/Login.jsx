@@ -20,13 +20,21 @@ function Login({ onLogin }) {
       const data = await authService.login({ email, password })
       
       // Store token and user info
+      console.log('✓ Login successful:', data)
       localStorage.setItem('token', data.access_token)
+      console.log('✓ Token stored in localStorage')
       localStorage.setItem('user', JSON.stringify(data.user))
+      console.log('✓ User data stored')
+      
+      // Verify token was stored
+      const storedToken = localStorage.getItem('token')
+      console.log('✓ Verification - Token in storage:', storedToken ? 'YES' : 'NO')
       
       onLogin(data.user)
       navigate('/')
       
     } catch (err) {
+      console.error('✗ Login error:', err)
       setError(err.message)
     } finally {
       setLoading(false)
