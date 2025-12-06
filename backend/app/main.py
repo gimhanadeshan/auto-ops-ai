@@ -104,7 +104,7 @@ except Exception as e:
 
 # Import other endpoints individually so optional heavy dependencies don't break startup
 # Use chat_enhanced (LLM-First with intelligent RAG) for the main chat
-for _name, _tag in (("auth", "Authentication"), ("chat_enhanced", "Chat"), ("tickets", "Tickets"), ("dashboard", "Dashboard"), ("monitoring", "Monitoring"), ("admin", "Admin")):
+for _name, _tag in (("auth", "Authentication"), ("chat_enhanced", "Chat"), ("tickets", "Tickets"), ("dashboard", "Dashboard"), ("monitoring", "Monitoring"), ("admin", "Admin"), ("static_data", "Static Data")):
     try:
         mod = importlib.import_module(f"app.api.endpoints.{_name}")
         # Monitoring endpoint gets its own prefix path
