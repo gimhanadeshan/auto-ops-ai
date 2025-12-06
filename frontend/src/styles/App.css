@@ -592,10 +592,6 @@ body {
 
 /* Responsive Design */
 @media (max-width: 768px) {
-  .main-layout {
-    flex-direction: column;
-  }
-
   .chat-messages {
     padding: var(--space-md);
   }
@@ -938,10 +934,6 @@ body {
 
 /* Responsive Design */
 @media (max-width: 768px) {
-  .main-layout {
-    flex-direction: column;
-  }
-
   .chat-messages {
     padding: 1rem;
   }

@@ -211,7 +211,7 @@
   }
 
   .logo-text,
-  .sidebar-user .user-info,
+  .sidebar-user,
   .nav-item span {
     display: none;
   }
