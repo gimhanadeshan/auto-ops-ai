@@ -1,10 +1,11 @@
-import { useState } from 'react'
-import { BarChart3, TrendingUp, Calendar, Download, Filter } from 'lucide-react'
+import { useState,useEffect } from 'react'
+import { BarChart3, TrendingUp, Calendar, Download, Filter,AlertTriangle} from 'lucide-react'
 import '../styles/components/Reports.css'
 
 function Reports() {
   const [dateRange, setDateRange] = useState('7days')
   const [reportType, setReportType] = useState('tickets')
+  const [predictionData, setPredictionData] = useState(null)
 
   const ticketStats = {
     total: 245,
@@ -35,6 +36,31 @@ function Reports() {
   const handleExport = () => {
     alert('Exporting report as PDF...')
   }
+
+  useEffect(() => {
+    const fetchPredictions = async () => {
+      try {
+        // Step 1: Get real system metrics from backend
+        const metricsResponse = await fetch('http://localhost:8000/api/v1/system-metrics')
+        const metrics = await metricsResponse.json()
+        
+        // Step 2: Send metrics to prediction endpoint
+        const response = await fetch('http://localhost:8000/api/v1/predict-health', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(metrics)
+        })
+        const data = await response.json()
+        setPredictionData(data)
+      } catch (error) {
+        console.error('Failed to fetch predictions:', error)
+      }
+    }
+
+    fetchPredictions()
+    const interval = setInterval(fetchPredictions, 60000) // Update every minute
+    return () => clearInterval(interval)
+  }, [])
 
   return (
     <div className="reports-container">
@@ -101,6 +127,77 @@ function Reports() {
       </div>
 
       <div className="reports-grid">
+        <div className="report-card prediction-card">
+          <div className="card-header">
+            <h3>
+              <AlertTriangle size={20} />
+              Predictive Health Monitoring
+            </h3>
+          </div>
+          <div className="prediction-content">
+            {predictionData ? (
+              <>
+                <div className={`prediction-status ${predictionData.status.toLowerCase()}`}>
+                  <span className="status-badge">{predictionData.status}</span>
+                  <span className="confidence">Confidence: {predictionData.confidence}%</span>
+                </div>
+                
+                <div className="prediction-metrics">
+                  <div className="metric-row">
+                    <span>CPU Usage</span>
+                    <div className="bar-bg">
+                      <div className="bar-fg" style={{ width: `${predictionData.metrics.cpu_usage}%` }}></div>
+                    </div>
+                    <span className="metric-value">{predictionData.metrics.cpu_usage}%</span>
+                  </div>
+                  <div className="metric-row">
+                    <span>RAM Usage</span>
+                    <div className="bar-bg">
+                      <div className="bar-fg" style={{ width: `${predictionData.metrics.ram_usage}%` }}></div>
+                    </div>
+                    <span className="metric-value">{predictionData.metrics.ram_usage}%</span>
+                  </div>
+                  <div className="metric-row">
+                    <span>Disk Usage</span>
+                    <div className="bar-bg">
+                      <div className="bar-fg" style={{ width: `${predictionData.metrics.disk_usage}%` }}></div>
+                    </div>
+                    <span className="metric-value">{predictionData.metrics.disk_usage}%</span>
+                  </div>
+                  <div className="metric-row">
+                    <span>Temperature</span>
+                    <div className="bar-bg">
+                      <div className="bar-fg" style={{ width: `${(predictionData.metrics.temperature / 100) * 100}%` }}></div>
+                    </div>
+                    <span className="metric-value">{predictionData.metrics.temperature}°C</span>
+                  </div>
+                </div>
+
+                {predictionData.alerts && predictionData.alerts.length > 0 && (
+                  <div className="prediction-alerts">
+                    <h4>Active Alerts</h4>
+                    {predictionData.alerts.map((alert, idx) => (
+                      <div key={idx} className="alert-item">
+                        <AlertTriangle size={16} />
+                        <span>{alert}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {predictionData.recommendations && (
+                  <div className="prediction-recommendations">
+                    <h4>Recommendations</h4>
+                    <p>{predictionData.recommendations}</p>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="loading">Loading predictions...</div>
+            )}
+          </div>
+        </div>
+
         <div className="report-card">
           <div className="card-header">
             <h3>
@@ -126,6 +223,7 @@ function Reports() {
             ))}
           </div>
         </div>
+
 
         <div className="report-card">
           <div className="card-header">
