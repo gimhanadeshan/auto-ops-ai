@@ -10,6 +10,7 @@ from app.models.ticket import (
     TicketDB, TicketCreate, TicketUpdate, TicketStatus,
     TicketPriority, TicketCategory
 )
+from app.models.user import UserDB
 logger = logging.getLogger(__name__)
 
 
@@ -113,6 +114,30 @@ class TicketService:
         db.commit()
         
         return True
+    
+    @staticmethod
+    def get_team_members(db: Session, manager_id: int) -> List[str]:
+        """
+        Get all team members' emails for a manager.
+        Returns list of user emails who have this manager as their manager_id or work in same department.
+        """
+        manager = db.query(UserDB).filter(UserDB.id == manager_id).first()
+        if not manager:
+            return []
+        
+        # Get direct reports (users with this manager_id)
+        direct_reports = db.query(UserDB).filter(UserDB.manager_id == manager_id).all()
+        team_emails = [user.email for user in direct_reports]
+        
+        # Optionally: get users in same department
+        if manager.department:
+            dept_users = db.query(UserDB).filter(
+                UserDB.department == manager.department,
+                UserDB.id != manager_id  # Exclude the manager themselves
+            ).all()
+            team_emails.extend([user.email for user in dept_users if user.email not in team_emails])
+        
+        return team_emails
     
     @staticmethod
     def get_ticket_stats(db: Session) -> dict:

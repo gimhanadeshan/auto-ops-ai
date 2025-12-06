@@ -350,6 +350,46 @@ class DatasetAnalyzer:
             "categories": categories,
             "kb_articles": len(self.knowledge_base)
         }
+    
+    def get_user_action_preferences(self, user_email: str) -> Dict:
+        """
+        Analyze user's past tickets to personalize action suggestions.
+        Returns insights about what issues this user commonly faces.
+        """
+        user_id = self._get_user_id_by_email(user_email)
+        if not user_id:
+            return {"common_categories": [], "recurring_issues": [], "tier": "staff"}
+        
+        # Get user history
+        history = self.user_history.get(user_id, {})
+        past_tickets = history.get('past_tickets', [])
+        tier = self.users.get(user_id, {}).get('tier', 'staff')
+        
+        # Analyze common issue patterns
+        issue_keywords = {}
+        for ticket in past_tickets:
+            issue = ticket.get('issue', '').lower()
+            # Extract key terms
+            for word in ['vpn', 'outlook', 'network', 'slow', 'wi-fi', 'wifi', 'laptop', 
+                        'visual studio', 'vs code', 'zoom', 'audio', 'docker', 'git', 
+                        'ssh', 'keyboard', 'mouse', 'dock', 'printer', 'email', 'password']:
+                if word in issue:
+                    issue_keywords[word] = issue_keywords.get(word, 0) + 1
+        
+        # Get top recurring issues
+        recurring = sorted(issue_keywords.items(), key=lambda x: x[1], reverse=True)[:3]
+        
+        # Get metrics
+        metrics = history.get('metrics', {})
+        
+        return {
+            "tier": tier,
+            "recurring_issues": [issue[0] for issue in recurring],
+            "past_ticket_count": len(past_tickets),
+            "account_health": metrics.get('account_health', 100),
+            "network_stability": metrics.get('network_stability', 100),
+            "last_login": history.get('last_login', None)
+        }
 
 
 # Singleton instance

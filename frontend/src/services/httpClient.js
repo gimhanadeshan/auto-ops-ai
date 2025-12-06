@@ -11,7 +11,13 @@ class HttpClient {
   }
 
   getAuthToken() {
-    return localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN)
+    const token = localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN)
+    if (token) {
+      console.debug('✓ Auth token found:', token.substring(0, 20) + '...')
+    } else {
+      console.debug('✗ No auth token in localStorage')
+    }
+    return token
   }
 
   getHeaders(customHeaders = {}) {
@@ -23,6 +29,9 @@ class HttpClient {
     const token = this.getAuthToken()
     if (token) {
       headers['Authorization'] = `Bearer ${token}`
+      console.debug('✓ Authorization header set')
+    } else {
+      console.warn('⚠ No token available for Authorization header')
     }
 
     return headers
@@ -34,6 +43,11 @@ class HttpClient {
       ...options,
       headers: this.getHeaders(options.headers)
     }
+
+    console.debug(`📡 ${options.method || 'GET'} ${url}`, {
+      headers: config.headers,
+      body: options.body
+    })
 
     try {
       const controller = new AbortController()
@@ -47,6 +61,13 @@ class HttpClient {
       clearTimeout(timeoutId)
 
       if (!response.ok) {
+        console.error(`❌ Request failed with status ${response.status}`)
+        if (response.status === 401) {
+          console.warn('⚠ Unauthorized (401) - Clearing token and redirecting to login')
+          localStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN)
+          localStorage.removeItem('user')
+          window.location.href = '/login'
+        }
         throw await this.handleErrorResponse(response)
       }
 

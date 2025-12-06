@@ -22,7 +22,8 @@ class UserDB(Base):
     role = Column(String, default=Role.STAFF.value)  # Using Role enum
     tier = Column(String, default="staff")  # Deprecated: kept for backward compatibility
     department = Column(String, nullable=True)  # For team-based access control
-    is_active = Column(Boolean, default=True)
+    manager_id = Column(Integer, nullable=True)  # ID of user's manager for team hierarchy
+    is_active = Column(Boolean, default=False)  # Inactive by default - admin must activate
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -49,6 +50,7 @@ class UserResponse(BaseModel):
     name: str
     role: str
     department: Optional[str] = None
+    manager_id: Optional[int] = None
     is_active: bool
     created_at: datetime
     permissions: Optional[List[str]] = None  # Computed field
@@ -68,6 +70,7 @@ class UserResponse(BaseModel):
             name=user_db.name,
             role=user_db.role,
             department=user_db.department,
+            manager_id=user_db.manager_id,
             is_active=user_db.is_active,
             created_at=user_db.created_at,
             permissions=permissions
@@ -80,3 +83,26 @@ class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
+
+
+class ManagerAssignmentRequest(BaseModel):
+    """Request to assign a manager to a user."""
+    manager_id: Optional[int] = None
+
+
+class UserCreate(BaseModel):
+    """User creation request."""
+    email: EmailStr
+    name: str
+    password: str
+    role: Role = Role.STAFF
+    department: Optional[str] = None
+
+
+class UserUpdate(BaseModel):
+    """User update request."""
+    email: EmailStr
+    name: str
+    password: Optional[str] = None
+    role: Role = Role.STAFF
+    department: Optional[str] = None

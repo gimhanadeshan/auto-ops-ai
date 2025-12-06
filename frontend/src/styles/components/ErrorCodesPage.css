@@ -25,7 +25,6 @@
   justify-content: center;
   width: 64px;
   height: 64px;
-  border-radius: 12px;
   background: var(--color-danger-bg);
   color: var(--color-danger);
 }
@@ -75,7 +74,6 @@
   padding: var(--space-md) var(--space-md) var(--space-md) 3rem;
   background: var(--color-bg-hover);
   border: 2px solid var(--color-border-primary);
-  border-radius: 8px;
   color: var(--color-text-primary);
   font-size: var(--font-size-base);
   transition: all var(--transition-base);
@@ -146,7 +144,6 @@
 .tab-count {
   padding: 2px 8px;
   background: var(--color-bg-hover);
-  border-radius: 12px;
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-bold);
 }
@@ -172,7 +169,6 @@
   flex-direction: column;
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border-primary);
-  border-radius: 12px;
   overflow: hidden;
 }
 
@@ -202,7 +198,6 @@
   padding: var(--space-md);
   background: var(--color-bg-hover);
   border: 2px solid var(--color-border-primary);
-  border-radius: 8px;
   cursor: pointer;
   transition: all var(--transition-base);
 }
@@ -229,7 +224,6 @@
 .error-code-badge {
   background: var(--color-bg-primary);
   padding: 4px 12px;
-  border-radius: 6px;
   border: 1px solid var(--color-border-primary);
 }
 
@@ -242,7 +236,6 @@
 
 .severity-badge {
   padding: 4px 10px;
-  border-radius: 6px;
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
 }
@@ -315,7 +308,6 @@
   flex-direction: column;
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border-primary);
-  border-radius: 12px;
   overflow: hidden;
 }
 
@@ -345,13 +337,11 @@
   color: var(--color-primary);
   background: var(--color-primary-bg);
   padding: var(--space-sm) var(--space-md);
-  border-radius: 8px;
   border: 2px solid var(--color-primary);
 }
 
 .details-severity {
   padding: var(--space-xs) var(--space-md);
-  border-radius: 6px;
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
 }
@@ -397,7 +387,6 @@
   margin-bottom: var(--space-sm);
   background: var(--color-bg-hover);
   border-left: 3px solid var(--color-primary);
-  border-radius: 6px;
   font-size: var(--font-size-base);
   color: var(--color-text-secondary);
   line-height: 1.6;
@@ -417,7 +406,6 @@
   height: 24px;
   background: var(--color-primary);
   color: white;
-  border-radius: 50%;
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-bold);
 }
@@ -461,13 +449,11 @@
 .error-list::-webkit-scrollbar-track,
 .error-details::-webkit-scrollbar-track {
   background: var(--color-bg-hover);
-  border-radius: 4px;
 }
 
 .error-list::-webkit-scrollbar-thumb,
 .error-details::-webkit-scrollbar-thumb {
   background: var(--color-border-primary);
-  border-radius: 4px;
 }
 
 .error-list::-webkit-scrollbar-thumb:hover,
@@ -517,4 +503,5 @@
     font-size: var(--font-size-xl);
   }
 }
+
 

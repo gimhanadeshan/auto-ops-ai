@@ -198,7 +198,7 @@ def has_permission(role: Role, permission: Permission) -> bool:
 
 
 def can_view_ticket(user_role: Role, ticket_user_email: str, current_user_email: str, 
-                    ticket_assigned_to: str = None) -> bool:
+                    ticket_assigned_to: str = None, team_member_emails: List[str] = None) -> bool:
     """
     Determine if a user can view a specific ticket based on their role.
     
@@ -207,6 +207,7 @@ def can_view_ticket(user_role: Role, ticket_user_email: str, current_user_email:
         ticket_user_email: Email of the user who created the ticket
         current_user_email: Email of the current user
         ticket_assigned_to: Who the ticket is assigned to
+        team_member_emails: List of team member emails for managers
     
     Returns:
         True if the user can view the ticket, False otherwise
@@ -225,23 +226,44 @@ def can_view_ticket(user_role: Role, ticket_user_email: str, current_user_email:
     if ticket_assigned_to and ticket_assigned_to == current_user_email:
         return True
     
-    # Managers can view team tickets (implement team logic as needed)
+    # Managers can view team tickets (team member tickets)
     if Permission.TICKET_VIEW_TEAM in role_perms:
-        # TODO: Implement team/department matching logic
-        # For now, managers can see all open/escalated tickets
-        return True
+        if team_member_emails and ticket_user_email in team_member_emails:
+            return True
     
     return False
 
 
-def can_update_ticket(user_role: Role, ticket_user_email: str, current_user_email: str) -> bool:
-    """Check if user can update a ticket."""
+def can_update_ticket(user_role: Role, ticket_user_email: str, current_user_email: str, 
+                      ticket_assigned_to: str = None, team_member_emails: List[str] = None) -> bool:
+    """
+    Check if user can update a ticket.
+    
+    Args:
+        user_role: The role of the user trying to update the ticket
+        ticket_user_email: Email of the user who created the ticket
+        current_user_email: Email of the current user
+        ticket_assigned_to: Who the ticket is assigned to
+        team_member_emails: List of team member emails for managers
+    
+    Returns:
+        True if the user can update the ticket, False otherwise
+    """
     role_perms = get_role_permissions(user_role)
     
     if Permission.TICKET_UPDATE_ANY in role_perms:
         return True
     
     if Permission.TICKET_UPDATE_OWN in role_perms and ticket_user_email == current_user_email:
+        return True
+    
+    # Support staff can update assigned tickets
+    if ticket_assigned_to and ticket_assigned_to == current_user_email:
+        if Permission.TICKET_UPDATE_ANY in role_perms or Permission.TICKET_UPDATE_OWN in role_perms:
+            return True
+    
+    # Managers can update team member tickets
+    if Permission.TICKET_UPDATE_OWN in role_perms and team_member_emails and ticket_user_email in team_member_emails:
         return True
     
     return False

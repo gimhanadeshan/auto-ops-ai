@@ -485,12 +485,35 @@ async def get_real_system_stats():
         else:
             disk_usage = psutil.disk_usage('/')
         
-        # Calculate network activity percentage (simplified)
+        # Calculate network activity (bytes per second, normalized to percentage)
+        # Get current network stats
         network_io = psutil.net_io_counters()
-        network_percent = 0
-        if network_io:
-            total_bytes = network_io.bytes_sent + network_io.bytes_recv
-            network_percent = min(100, (total_bytes % 1000000000) / 10000000)
+        
+        # For network, we'll show a simplified activity indicator
+        # This isn't a true "percentage" but shows relative activity
+        # Max expected: 100 Mbps = 12.5 MB/s, we'll use this as baseline
+        current_time = datetime.utcnow().timestamp()
+        
+        # Store previous values for rate calculation
+        if not hasattr(get_real_system_stats, '_last_network'):
+            get_real_system_stats._last_network = {
+                'bytes': network_io.bytes_sent + network_io.bytes_recv,
+                'time': current_time
+            }
+            network_percent = 0
+        else:
+            time_diff = current_time - get_real_system_stats._last_network['time']
+            if time_diff > 0:
+                bytes_diff = (network_io.bytes_sent + network_io.bytes_recv) - get_real_system_stats._last_network['bytes']
+                bytes_per_sec = bytes_diff / time_diff
+                # Normalize to percentage (assuming 100 Mbps max = 12.5 MB/s)
+                network_percent = min(100, (bytes_per_sec / (12.5 * 1024 * 1024)) * 100)
+            else:
+                network_percent = 0
+            get_real_system_stats._last_network = {
+                'bytes': network_io.bytes_sent + network_io.bytes_recv,
+                'time': current_time
+            }
         
         return {
             "cpu": round(cpu, 1),

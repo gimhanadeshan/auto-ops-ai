@@ -19,15 +19,18 @@ async def register(
     db: Session = Depends(get_db)
 ):
     """
-    Register a new user.
+    Register a new user (account will be inactive until admin approves).
     
     - **email**: Valid email address
     - **name**: Full name
     - **password**: Strong password (min 6 characters)
     - **tier**: User tier (staff, manager, contractor)
+    
+    Note: New accounts are created as inactive and require admin activation.
     """
     try:
         user = auth_service.register_user(db, user_data)
+        logger.info(f"User registered, pending activation: {user_data.email}")
         return user
     except HTTPException:
         raise
@@ -61,10 +64,10 @@ async def login(
             data={"sub": user.email, "user_id": user.id}
         )
         
-        # Return token and user info
+        # Return token and user info with permissions
         return Token(
             access_token=access_token,
-            user=UserResponse.from_orm(user)
+            user=UserResponse.from_db(user)
         )
         
     except HTTPException:
@@ -83,7 +86,7 @@ async def get_current_user(
     db: Session = Depends(get_db)
 ):
     """
-    Get current user information.
+    Get current user information with permissions.
     """
     user = auth_service.get_user_by_email(db, email)
     if not user:
@@ -91,4 +94,4 @@ async def get_current_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
         )
-    return user
+    return UserResponse.from_db(user)

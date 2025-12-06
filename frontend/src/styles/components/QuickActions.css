@@ -1,7 +1,6 @@
 .quick-actions-widget {
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border-primary);
-  border-radius: 12px;
   padding: var(--space-lg);
   margin-bottom: var(--space-xl);
 }
@@ -46,7 +45,6 @@
   padding: var(--space-md) var(--space-md) var(--space-md) calc(var(--space-md) + 20px + var(--space-sm));
   background: var(--color-bg-hover);
   border: 2px solid var(--color-border-primary);
-  border-radius: 8px;
   font-size: var(--font-size-base);
   color: var(--color-text-primary);
   transition: all var(--transition-base);
@@ -74,7 +72,6 @@
   border: none;
   color: var(--color-text-secondary);
   cursor: pointer;
-  border-radius: 6px;
   transition: all var(--transition-base);
 }
 
@@ -159,7 +156,6 @@
   background: var(--color-primary);
   color: white;
   border: none;
-  border-radius: 8px;
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-semibold);
   cursor: pointer;
@@ -178,7 +174,6 @@
   gap: var(--space-sm);
   padding: var(--space-sm) var(--space-md);
   margin-bottom: var(--space-md);
-  border-radius: 8px;
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   animation: slideDown 0.3s ease-out;
@@ -228,7 +223,6 @@
   padding: var(--space-lg);
   background: var(--color-bg-hover);
   border: 2px solid var(--color-border-primary);
-  border-radius: 10px;
   cursor: pointer;
   transition: all var(--transition-base);
   color: var(--color-text-primary);
@@ -258,7 +252,6 @@
   justify-content: center;
   width: 48px;
   height: 48px;
-  border-radius: 50%;
   background: var(--color-bg-primary);
   transition: all var(--transition-base);
 }
@@ -364,7 +357,6 @@
 .confirmation-dialog {
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border-primary);
-  border-radius: 12px;
   max-width: 450px;
   width: 90%;
   animation: slideUp 0.3s ease-out;
@@ -413,7 +405,6 @@
 .confirm-btn-cancel,
 .confirm-btn-ok {
   padding: var(--space-sm) var(--space-lg);
-  border-radius: 8px;
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-semibold);
   cursor: pointer;
@@ -471,7 +462,6 @@
 .modal-content {
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border-primary);
-  border-radius: 12px;
   max-width: 600px;
   width: 90%;
   max-height: 80vh;
@@ -516,7 +506,6 @@
   border: none;
   color: var(--color-text-secondary);
   cursor: pointer;
-  border-radius: 6px;
   transition: all var(--transition-base);
 }
 
@@ -546,7 +535,6 @@
 .command-item {
   background: var(--color-bg-hover);
   border: 1px solid var(--color-border-primary);
-  border-radius: 8px;
   padding: var(--space-md);
   transition: all var(--transition-base);
 }
@@ -606,7 +594,9 @@
   align-items: center;
   gap: var(--space-xs);
   padding: var(--space-xs) var(--space-sm);
-  border-radius: 6px;
+  background: var(--color-primary-bg);
+  border: 1px solid var(--color-primary);
+  color: var(--color-primary);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);
   cursor: pointer;
@@ -643,7 +633,6 @@
   color: var(--color-text-primary);
   background: var(--color-bg-primary);
   padding: var(--space-sm) var(--space-md);
-  border-radius: 6px;
   border: 1px solid var(--color-border-primary);
   word-break: break-all;
   line-height: 1.6;
@@ -656,7 +645,6 @@
   padding: var(--space-sm) var(--space-md);
   background: var(--color-info-bg);
   border: 1px solid var(--color-info);
-  border-radius: 6px;
   font-size: var(--font-size-sm);
   color: var(--color-info);
 }
@@ -704,4 +692,5 @@
     height: 36px;
   }
 }
+
 

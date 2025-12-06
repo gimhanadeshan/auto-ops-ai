@@ -23,10 +23,21 @@ def get_current_user(
     Get current authenticated user from JWT token.
     """
     try:
+        if not credentials:
+            print("❌ No credentials provided")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authentication credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
         token = credentials.credentials
+        print(f"🔑 Token received: {token[:20]}...")
         payload = verify_token(token)
+        print(f"✓ Token verified: {payload}")
         
         if payload is None:
+            print("❌ Token payload is None")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid authentication credentials",
@@ -35,6 +46,7 @@ def get_current_user(
         
         email = payload.get("sub")
         if email is None:
+            print("❌ No email in payload")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid authentication credentials",
@@ -44,17 +56,20 @@ def get_current_user(
         # Get user from database
         user = db.query(UserDB).filter(UserDB.email == email).first()
         if user is None:
+            print(f"❌ User {email} not found")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="User not found",
                 headers={"WWW-Authenticate": "Bearer"},
             )
         
+        print(f"✓ User authenticated: {email}")
         return user
         
     except HTTPException:
         raise
     except Exception as e:
+        print(f"❌ Auth error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Authentication error: {str(e)}",

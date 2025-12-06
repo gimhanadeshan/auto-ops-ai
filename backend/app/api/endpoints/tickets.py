@@ -67,11 +67,16 @@ async def get_tickets(
     Get list of tickets with optional filtering.
     Access is filtered based on user role:
     - Staff/Contractor: Only their own tickets
-    - Manager: Team tickets
+    - Manager: Own tickets and team tickets (direct reports + department colleagues)
     - Support/Admin: All tickets
     """
     try:
         user_role = Role(current_user.role)
+        
+        # For managers, get their team members
+        team_member_emails = None
+        if user_role == Role.MANAGER and current_user.id:
+            team_member_emails = ticket_service.get_team_members(db, current_user.id)
         
         # Get all tickets first (will filter by permission)
         all_tickets = ticket_service.get_tickets(
@@ -90,7 +95,8 @@ async def get_tickets(
                 user_role=user_role,
                 ticket_user_email=ticket.user_email,
                 current_user_email=current_user.email,
-                ticket_assigned_to=ticket.assigned_to
+                ticket_assigned_to=ticket.assigned_to,
+                team_member_emails=team_member_emails
             ):
                 filtered_tickets.append(ticket)
         
@@ -140,11 +146,18 @@ async def get_ticket(
     
     # Check if user can view this ticket
     user_role = Role(current_user.role)
+    
+    # For managers, get their team members
+    team_member_emails = None
+    if user_role == Role.MANAGER and current_user.id:
+        team_member_emails = ticket_service.get_team_members(db, current_user.id)
+    
     if not can_view_ticket(
         user_role=user_role,
         ticket_user_email=ticket.user_email,
         current_user_email=current_user.email,
-        ticket_assigned_to=ticket.assigned_to
+        ticket_assigned_to=ticket.assigned_to,
+        team_member_emails=team_member_emails
     ):
         # Log access denied
         audit_service.log_access_denied(
@@ -182,11 +195,18 @@ async def update_ticket(
         
         # Check if user can update this ticket
         user_role = Role(current_user.role)
+        
+        # For managers, get their team members
+        team_member_emails = None
+        if user_role == Role.MANAGER and current_user.id:
+            team_member_emails = ticket_service.get_team_members(db, current_user.id)
+        
         if not can_update_ticket(
             user_role=user_role,
             ticket_user_email=existing_ticket.user_email,
             current_user_email=current_user.email,
-            ticket_assigned_to=existing_ticket.assigned_to
+            ticket_assigned_to=existing_ticket.assigned_to,
+            team_member_emails=team_member_emails
         ):
             # Log access denied
             audit_service.log_access_denied(

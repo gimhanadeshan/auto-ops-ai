@@ -4,6 +4,8 @@ import { fetchBackendStatus, sendChatMessage, resetChatConversation, sendChatMes
 import { Bot, User, Send, FileText, AlertCircle, Zap, Wrench, HelpCircle, Mic, MicOff, Image, X } from 'lucide-react'
 import { STORAGE_KEYS } from './config/constants'
 import { voiceService } from './services/voiceService'
+import actionService from './services/actionService'
+import ActionModal, { ActionSuggestions } from './components/ActionModal'
 import Sidebar from './components/Sidebar'
 import Dashboard from './components/Dashboard'
 import TicketList from './components/TicketList'
@@ -19,6 +21,8 @@ import AuditLogs from './components/AuditLogs'
 import Login from './components/Login'
 import Register from './components/Register'
 import './styles/App.css'
+import './styles/agent-mode.css'
+import './styles/components/PermissionComponents.css'
 
 function ChatPage({ user }) {
   const location = useLocation()  // Track navigation to detect when coming from tickets
@@ -31,9 +35,27 @@ function ChatPage({ user }) {
   const [isListening, setIsListening] = useState(false)
   const [voiceSupported, setVoiceSupported] = useState(false)
   const [interimTranscript, setInterimTranscript] = useState('')
+  
+  // Action execution state
+  const [showActionModal, setShowActionModal] = useState(false)
+  const [selectedAction, setSelectedAction] = useState(null)
+  const [actionExecuting, setActionExecuting] = useState(false)
+  const [actionResult, setActionResult] = useState(null)
+  const [pendingActionRequest, setPendingActionRequest] = useState(null)
   const [selectedImage, setSelectedImage] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
   const [initKey, setInitKey] = useState(0)  // Force re-initialization
+  
+  // Step-by-step troubleshooting state
+  const [remainingActions, setRemainingActions] = useState([])
+  const [troubleshootingStep, setTroubleshootingStep] = useState(0)
+  const [awaitingFeedback, setAwaitingFeedback] = useState(false)
+  const [executedActionIds, setExecutedActionIds] = useState(new Set())  // Track executed actions
+  
+  // Agent Mode state
+  const [agentMode, setAgentMode] = useState(false)
+  const [showAgentModeTip, setShowAgentModeTip] = useState(false)
+  
   const messagesEndRef = useRef(null)
   const interimTranscriptRef = useRef('')
   const fileInputRef = useRef(null)
@@ -258,7 +280,7 @@ function ChatPage({ user }) {
     setLoading(true)
 
     try {
-      const response = await sendChatMessage(messages.concat(userMessage), user.email, currentTicket, currentSessionId)
+      const response = await sendChatMessage(messages.concat(userMessage), user.email, currentTicket, currentSessionId, agentMode)
       
       const assistantMessage = {
         role: 'assistant',
@@ -267,10 +289,28 @@ function ChatPage({ user }) {
         ticketId: response.ticket_id,
         action: response.action,
         priorityInfo: response.priority_info,
-        needsClarification: response.needs_clarification
+        needsClarification: response.needs_clarification,
+        suggestedActions: response.suggested_actions,  // First action only (step-by-step)
+        troubleshootingStep: response.metadata?.troubleshooting_step,
+        totalSteps: response.metadata?.total_steps,
+        agentModeSuggestion: response.agent_mode_suggestion  // Tip to enable agent mode
       }
 
       setMessages(prev => [...prev, assistantMessage])
+      
+      // Show agent mode tip if backend suggests it
+      if (response.agent_mode_suggestion && !agentMode) {
+        setShowAgentModeTip(true)
+      }
+      
+      // Track remaining actions for step-by-step troubleshooting
+      if (response.metadata?.remaining_actions && response.metadata.remaining_actions.length > 0) {
+        setRemainingActions(response.metadata.remaining_actions)
+        setTroubleshootingStep(response.metadata.troubleshooting_step || 1)
+      } else {
+        setRemainingActions([])
+        setTroubleshootingStep(0)
+      }
       
       // Track session and ticket from response
       if (response.session_id && !currentSessionId) {
@@ -291,6 +331,308 @@ function ChatPage({ user }) {
     } finally {
       setLoading(false)
     }
+  }
+
+  // Helper function to get LLM interpretation of action results
+  const getActionResultInterpretation = async (actionName, output, isSuccess) => {
+    try {
+      // Send the action result to chat for LLM interpretation
+      const interpretationPrompt = `[SYSTEM: The user ran "${actionName}" and got this result. Your job is to:
+1. Explain what this means in simple, friendly language (no technical jargon)
+2. Tell them if this is good news or if action is needed
+3. If there's a problem (like high memory 92%), suggest the NEXT specific step to take
+4. Keep it conversational and empathetic - avoid robotic responses
+5. Keep response concise (2-3 sentences max)
+
+Example good response: "Your memory is at 92% which is quite high! This is likely why things feel slow. Let's free up some space by optimizing memory - I'll suggest that next."
+
+Result:
+${typeof output === 'string' ? output : JSON.stringify(output, null, 2)}`
+      
+      const response = await sendChatMessage(
+        [...messages, { role: 'user', content: interpretationPrompt }],
+        user.email,
+        currentTicket,
+        currentSessionId
+      )
+      return response.message
+    } catch (e) {
+      console.warn('Failed to get LLM interpretation:', e)
+      return null
+    }
+  }
+
+  // Handle action selection from suggestions
+  const handleSelectAction = async (action) => {
+    // Get parameters - suggested_params are actual values, parameters is the schema
+    const params = action.suggested_params || {}
+    
+    // Track this action as executed
+    setExecutedActionIds(prev => new Set([...prev, action.id]))
+    
+    // For low-risk actions, execute directly
+    if (action.risk_level === 'low') {
+      try {
+        setActionExecuting(true)
+        setLoading(true)  // Show typing indicator
+        
+        const result = await actionService.executeActionDirectly(action.id, params, user.email)
+        
+        // Get raw output
+        const rawOutput = result.result?.output || ''
+        const outputStr = typeof rawOutput === 'string' ? rawOutput : JSON.stringify(rawOutput, null, 2)
+        
+        // Get follow-up actions from the result (Phase 1: Result-based suggestions)
+        const followupActions = result.result?.followup_actions || []
+        
+        // Get LLM interpretation of the result for better UX
+        let interpretation = null
+        if (result.success && outputStr) {
+          interpretation = await getActionResultInterpretation(action.name, outputStr, result.success)
+        }
+        
+        // Determine next steps: Use followup_actions if available, otherwise use remainingActions
+        let nextActions = []
+        if (followupActions.length > 0) {
+          // Filter out already executed actions from followup suggestions
+          nextActions = followupActions.filter(a => !executedActionIds.has(a.id))
+        }
+        if (nextActions.length === 0 && remainingActions.length > 0) {
+          // Fall back to remaining actions if no followup suggestions
+          nextActions = remainingActions.filter(a => !executedActionIds.has(a.id))
+        }
+        
+        const hasMoreSteps = nextActions.length > 0
+        const isLastStep = !hasMoreSteps
+        
+        // Update remaining actions with smart follow-ups
+        if (followupActions.length > 0) {
+          // Prioritize result-based suggestions
+          const combined = [...followupActions, ...remainingActions]
+          const uniqueActions = combined.filter((a, idx) => 
+            combined.findIndex(x => x.id === a.id) === idx && !executedActionIds.has(a.id)
+          )
+          setRemainingActions(uniqueActions.slice(1)) // First one will be suggested next
+        }
+        
+        // Build the response message
+        let content = ''
+        if (result.success) {
+          if (interpretation) {
+            content = `✅ **${action.name}** completed!\n\n${interpretation}`
+          } else {
+            content = `✅ **${action.name}** completed!\n\n\`\`\`\n${outputStr}\n\`\`\``
+          }
+          
+          // Add follow-up reason if available
+          if (followupActions.length > 0 && followupActions[0].reason) {
+            content += `\n\n💡 *Based on these results: ${followupActions[0].reason}*`
+          }
+        } else {
+          content = `❌ **${action.name}** failed: ${result.message || result.error}`
+        }
+        
+        // Add result message
+        const resultMessage = {
+          role: 'assistant',
+          content,
+          timestamp: new Date().toISOString(),
+          isActionResult: true,
+          actionOutput: result.result?.output,
+          actionType: action.id,
+          followupActions: followupActions, // Store for reference
+          // Always show feedback after action (for both last step and intermediate steps)
+          awaitingFeedback: result.success,
+          isLastStep: isLastStep
+        }
+        setMessages(prev => [...prev, resultMessage])
+        
+        // Set awaiting feedback state
+        if (result.success) {
+          setAwaitingFeedback(true)
+        }
+      } catch (error) {
+        const errorMessage = {
+          role: 'assistant',
+          content: `❌ Failed to execute action: ${error.message}`,
+          timestamp: new Date().toISOString(),
+          isError: true
+        }
+        setMessages(prev => [...prev, errorMessage])
+      } finally {
+        setActionExecuting(false)
+        setLoading(false)
+      }
+    } else {
+      // For medium/high risk actions, show approval modal
+      try {
+        const response = await actionService.createActionRequest(action.id, params, user.email, currentTicket)
+        
+        setSelectedAction({
+          ...action,
+          parameters: params,
+          estimated_duration: action.estimated_duration || 5
+        })
+        setPendingActionRequest(response.request_id)
+        setActionResult(null)
+        setShowActionModal(true)
+      } catch (error) {
+        const errorMessage = {
+          role: 'assistant',
+          content: `❌ Failed to prepare action: ${error.message}`,
+          timestamp: new Date().toISOString(),
+          isError: true
+        }
+        setMessages(prev => [...prev, errorMessage])
+      }
+    }
+  }
+  
+  // Handle user feedback on troubleshooting step
+  const handleTroubleshootingFeedback = async (resolved) => {
+    setAwaitingFeedback(false)
+    
+    if (resolved) {
+      // User says issue is resolved
+      setLoading(true)
+      try {
+        // Send to LLM for a nice closing response
+        const response = await sendChatMessage(
+          [...messages, { role: 'user', content: 'Yes, the issue is fixed now. Thank you!' }],
+          user.email,
+          currentTicket,
+          currentSessionId
+        )
+        const resolvedMessage = {
+          role: 'assistant',
+          content: response.message || '🎉 Great! I\'m glad that helped resolve your issue. Is there anything else I can help you with?',
+          timestamp: new Date().toISOString()
+        }
+        setMessages(prev => [...prev, resolvedMessage])
+      } catch (e) {
+        const resolvedMessage = {
+          role: 'assistant',
+          content: '🎉 Great! I\'m glad that helped resolve your issue. Is there anything else I can help you with?',
+          timestamp: new Date().toISOString()
+        }
+        setMessages(prev => [...prev, resolvedMessage])
+      } finally {
+        setLoading(false)
+      }
+      // Reset troubleshooting state
+      setRemainingActions([])
+      setTroubleshootingStep(0)
+      setExecutedActionIds(new Set())
+    } else {
+      // Filter out already executed actions from remaining
+      const availableActions = remainingActions.filter(a => !executedActionIds.has(a.id))
+      
+      // Show next action if available
+      if (availableActions.length > 0) {
+        const nextAction = availableActions[0]
+        const newRemaining = availableActions.slice(1)
+        const nextStep = troubleshootingStep + 1
+        
+        setRemainingActions(newRemaining)
+        setTroubleshootingStep(nextStep)
+        
+        // Build message with reason if available (from result-based suggestions)
+        let messageContent = `Okay, let's try something else.`
+        if (nextAction.reason) {
+          messageContent = `Based on the previous results: *${nextAction.reason}*\n\nLet's try this:`
+        }
+        
+        const nextStepMessage = {
+          role: 'assistant',
+          content: messageContent,
+          timestamp: new Date().toISOString(),
+          suggestedActions: [nextAction],
+          troubleshootingStep: nextStep,
+          totalSteps: nextStep + newRemaining.length
+        }
+        setMessages(prev => [...prev, nextStepMessage])
+      } else {
+        // No more actions, escalate to human
+        setLoading(true)
+        try {
+          const response = await sendChatMessage(
+            [...messages, { role: 'user', content: 'The issue is still not fixed after trying all the automated fixes.' }],
+            user.email,
+            currentTicket,
+            currentSessionId
+          )
+          const escalateMessage = {
+            role: 'assistant',
+            content: response.message || '😔 I\'ve tried all the automated fixes I know. Let me escalate this to our support team for further investigation. They\'ll follow up with you shortly.',
+            timestamp: new Date().toISOString()
+          }
+          setMessages(prev => [...prev, escalateMessage])
+        } catch (e) {
+          const escalateMessage = {
+            role: 'assistant',
+            content: '😔 I\'ve tried all the automated fixes I know. Let me escalate this to our support team for further investigation. They\'ll follow up with you shortly.',
+            timestamp: new Date().toISOString()
+          }
+          setMessages(prev => [...prev, escalateMessage])
+        } finally {
+          setLoading(false)
+        }
+        setTroubleshootingStep(0)
+        setExecutedActionIds(new Set())
+      }
+    }
+  }
+
+  // Handle action approval
+  const handleApproveAction = async () => {
+    if (!pendingActionRequest) return
+    
+    setActionExecuting(true)
+    try {
+      const result = await actionService.approveAction(pendingActionRequest, user.email, true)
+      setActionResult(result)
+      
+      // Format the output nicely
+      let formattedOutput = ''
+      if (result.result?.output) {
+        const output = result.result.output
+        if (typeof output === 'string') {
+          formattedOutput = '\n\n' + output
+        } else {
+          formattedOutput = '\n\n```json\n' + JSON.stringify(output, null, 2) + '\n```'
+        }
+      }
+      
+      // Add result as a message
+      const resultMessage = {
+        role: 'assistant',
+        content: result.success 
+          ? `✅ **${selectedAction.name}** completed successfully!\n\n${result.message || ''}${formattedOutput}`
+          : `❌ **${selectedAction.name}** failed: ${result.message || result.error}`,
+        timestamp: new Date().toISOString(),
+        isActionResult: true
+      }
+      setMessages(prev => [...prev, resultMessage])
+    } catch (error) {
+      setActionResult({ success: false, error: error.message })
+    } finally {
+      setActionExecuting(false)
+    }
+  }
+
+  // Handle action cancellation
+  const handleCancelAction = async () => {
+    if (pendingActionRequest) {
+      try {
+        await actionService.approveAction(pendingActionRequest, user.email, false)
+      } catch (error) {
+        console.warn('Failed to cancel action:', error)
+      }
+    }
+    setShowActionModal(false)
+    setSelectedAction(null)
+    setPendingActionRequest(null)
+    setActionResult(null)
   }
 
   const handleKeyPress = (e) => {
@@ -329,6 +671,8 @@ function ChatPage({ user }) {
     setMessages([welcomeMessage])
     setCurrentTicket(null)
     setCurrentSessionId(null)  // Reset session ID for new chat
+    setExecutedActionIds(new Set())  // Reset executed actions tracker
+    setAwaitingFeedback(false)  // Reset feedback state
     clearSelectedImage()
     
     // Clear localStorage for fresh start
@@ -505,6 +849,18 @@ function ChatPage({ user }) {
           </div>
         </div>
         <div className="chat-header-right">
+          <div className="agent-mode-toggle" title={agentMode ? "Agent Mode: Actions enabled" : "Agent Mode: Advice only"}>
+            <span className="agent-mode-label">Agent Mode</span>
+            <label className="toggle-switch">
+              <input 
+                type="checkbox" 
+                checked={agentMode}
+                onChange={(e) => setAgentMode(e.target.checked)}
+              />
+              <span className="toggle-slider"></span>
+            </label>
+            {agentMode && <span className="agent-mode-indicator">🤖</span>}
+          </div>
           <button
             onClick={handleNewChat}
             className="new-chat-btn"
@@ -556,6 +912,57 @@ function ChatPage({ user }) {
                       <Zap size={12} /> {msg.priorityInfo.priority_label}
                     </span>
                   )}
+                </div>
+              )}
+              {/* Agent Mode Suggestion */}
+              {msg.agentModeSuggestion && !agentMode && (
+                <div className="agent-mode-tip">
+                  <div className="tip-content">
+                    {msg.agentModeSuggestion}
+                  </div>
+                  <button 
+                    className="enable-agent-mode-btn"
+                    onClick={() => setAgentMode(true)}
+                  >
+                    Enable Agent Mode
+                  </button>
+                </div>
+              )}
+              {/* Action Suggestions */}
+              {msg.suggestedActions && msg.suggestedActions.length > 0 && (
+                <div className="action-suggestions-wrapper">
+                  {/* {msg.troubleshootingStep && (
+                    <div className="troubleshooting-step-indicator">
+                      Step {msg.troubleshootingStep} of {msg.totalSteps}
+                    </div>
+                  )} */}
+                  <ActionSuggestions 
+                    suggestions={msg.suggestedActions}
+                    onSelectAction={handleSelectAction}
+                    userEmail={user?.email}
+                  />
+                </div>
+              )}
+              {/* Feedback buttons for step-by-step troubleshooting */}
+              {msg.awaitingFeedback && awaitingFeedback && (
+                <div className="troubleshooting-feedback">
+                  <p className="feedback-question">Did this help resolve your issue?</p>
+                  <div className="feedback-buttons">
+                    <button 
+                      className="feedback-btn yes"
+                      onClick={() => handleTroubleshootingFeedback(true)}
+                    >
+                      ✅ Yes, it's fixed!
+                    </button>
+                    <button 
+                      className="feedback-btn no"
+                      onClick={() => handleTroubleshootingFeedback(false)}
+                    >
+                      {msg.isLastStep || remainingActions.length === 0 
+                        ? '❌ No, escalate to support' 
+                        : '❌ No, try next step'}
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -651,6 +1058,22 @@ function ChatPage({ user }) {
           )}
         </div>
       </div>
+
+      {/* Action Approval Modal */}
+      <ActionModal
+        isOpen={showActionModal}
+        onClose={() => {
+          setShowActionModal(false)
+          setSelectedAction(null)
+          setPendingActionRequest(null)
+          setActionResult(null)
+        }}
+        action={selectedAction}
+        onApprove={handleApproveAction}
+        onCancel={handleCancelAction}
+        isExecuting={actionExecuting}
+        result={actionResult}
+      />
     </div>
   )
 }
@@ -683,6 +1106,29 @@ function MainLayout({ user, onLogout }) {
 function App() {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
+
+  // Load primary color on app initialization
+  useEffect(() => {
+    const savedColor = localStorage.getItem('primaryColor')
+    if (savedColor) {
+      const root = document.documentElement
+      root.style.setProperty('--color-primary', savedColor)
+      
+      // Adjust hover color
+      const hexToRgb = (hex) => {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
+        return result ? {
+          r: parseInt(result[1], 16),
+          g: parseInt(result[2], 16),
+          b: parseInt(result[3], 16)
+        } : { r: 20, g: 184, b: 166 }
+      }
+      
+      const rgb = hexToRgb(savedColor)
+      const hoverColor = `rgb(${Math.max(0, rgb.r - 20)}, ${Math.max(0, rgb.g - 20)}, ${Math.max(0, rgb.b - 20)})`
+      root.style.setProperty('--color-primary-hover', hoverColor)
+    }
+  }, [])
 
   useEffect(() => {
     const storedUser = localStorage.getItem(STORAGE_KEYS.USER_DATA)

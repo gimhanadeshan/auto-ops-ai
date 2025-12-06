@@ -75,6 +75,11 @@ class ConversationState(BaseModel):
     phase: ConversationPhase = ConversationPhase.GREETING
     context: ConversationContext = ConversationContext()
     
+    # Agent Mode Configuration
+    agent_mode: bool = False  # When True, can suggest and execute actions
+    agent_mode_enabled_at: Optional[datetime] = None
+    agent_mode_auto_enabled: bool = False  # True if auto-enabled by user request
+    
     # Ticket information
     ticket_id: Optional[int] = None
     ticket_created: bool = False

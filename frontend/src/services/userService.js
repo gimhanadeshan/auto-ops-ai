@@ -54,10 +54,68 @@ export const getRoles = async () => {
   return response;
 };
 
+/**
+ * Get users who can be assigned to tickets
+ * Returns active users with admin and IT support roles
+ */
+export const getAssignableUsers = async () => {
+  const response = await httpClient.get(`${API_BASE}/users/assignable`);
+  return response;
+};
+
+/**
+ * Get available managers for a user
+ * Returns users who can be assigned as managers
+ */
+export const getAvailableManagers = async () => {
+  const response = await httpClient.get(`${API_BASE}/users/available-managers`);
+  return response;
+};
+
+/**
+ * Assign a manager to a user
+ */
+export const assignManager = async (userId, managerId) => {
+  const response = await httpClient.put(`${API_BASE}/users/${userId}/manager`, { 
+    manager_id: managerId 
+  });
+  return response;
+};
+
+/**
+ * Create a new user
+ */
+export const createUser = async (userData) => {
+  const response = await httpClient.post(`${API_BASE}/users`, userData);
+  return response;
+};
+
+/**
+ * Update user details (email, name, password, role, department)
+ */
+export const updateUser = async (userId, userData) => {
+  const response = await httpClient.put(`${API_BASE}/users/${userId}`, userData);
+  return response;
+};
+
+/**
+ * Delete a user
+ */
+export const deleteUser = async (userId) => {
+  const response = await httpClient.delete(`${API_BASE}/users/${userId}`);
+  return response;
+};
+
 export default {
   getUsers,
   getUserById,
   updateUserRole,
   updateUserStatus,
-  getRoles
+  getRoles,
+  getAssignableUsers,
+  getAvailableManagers,
+  assignManager,
+  createUser,
+  updateUser,
+  deleteUser
 };

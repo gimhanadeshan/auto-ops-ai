@@ -60,13 +60,13 @@
 .user-avatar {
   width: 40px;
   height: 40px;
-  border-radius: 50%;
   background: var(--color-primary);
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
   flex-shrink: 0;
+  border-radius: 50%;
 }
 
 .user-info {
@@ -211,7 +211,7 @@
   }
 
   .logo-text,
-  .sidebar-user .user-info,
+  .sidebar-user,
   .nav-item span {
     display: none;
   }
@@ -239,3 +239,4 @@
     padding: var(--space-sm);
   }
 }
+
