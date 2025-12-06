@@ -52,7 +52,14 @@ export const API_ENDPOINTS = {
   },
   
   // Status endpoint
-  STATUS: '/api/status'
+  STATUS: '/api/status',
+  
+  // Static data endpoints
+  STATIC_DATA: {
+    QUICK_ACTIONS: '/api/v1/quick-actions',
+    ERROR_CODES: '/api/v1/error-codes',
+    ERROR_CODES_BY_PLATFORM: (platform) => `/api/v1/error-codes/${platform}`
+  }
 }
 
 // Route Paths

@@ -33,6 +33,41 @@ import '../styles/components/QuickActions.css'
 
 const STORAGE_KEY_RECENTLY_USED = 'quickActions_recentlyUsed'
 
+// Icon mapping from string names to React components
+const iconMap = {
+  Activity, HardDrive, Wifi, RefreshCw, Trash2, Terminal,
+  CheckCircle, AlertCircle, X, Copy, Info, Search, Clock,
+  Globe, Shield, MapPin, Monitor, List, Users, Folder,
+  Server, Cpu, Play, Settings, FileText, Star, XCircle
+}
+
+// Detect user's operating system
+const detectOS = () => {
+  const userAgent = window.navigator.userAgent.toLowerCase()
+  const platform = window.navigator.platform.toLowerCase()
+  
+  if (platform.includes('win') || userAgent.includes('windows')) {
+    return 'windows'
+  } else if (platform.includes('mac') || userAgent.includes('macintosh') || userAgent.includes('mac os x')) {
+    return 'mac'
+  } else if (platform.includes('linux') || userAgent.includes('linux')) {
+    return 'linux'
+  }
+  return 'unknown'
+}
+
+// Get command for current OS
+const getCommandForOS = (commands, os) => {
+  if (!commands || typeof commands !== 'object') return null
+  
+  // Try to get command for detected OS first
+  const cmd = commands[os] || commands[os.charAt(0).toUpperCase() + os.slice(1)]
+  if (cmd) return cmd
+  
+  // Fallback to any available command
+  return Object.values(commands)[0] || null
+}
+
 function QuickActions({ hideHeader = false }) {
   const [loading, setLoading] = useState(null)
   const [result, setResult] = useState(null)
@@ -68,6 +103,50 @@ function QuickActions({ hideHeader = false }) {
       showResult('success', 'Copied to clipboard!')
     } catch (err) {
       showResult('error', 'Failed to copy')
+    }
+  }
+
+  // Open terminal with command by downloading and running a script
+  const openTerminalWithCommand = async (command, platform) => {
+    const detectedOS = detectOS()
+    const os = platform || detectedOS
+    const cmd = command
+
+    let scriptContent = ''
+    let filename = ''
+    let mimeType = ''
+
+    try {
+      if (os === 'windows') {
+        // Create a batch file for Windows
+        filename = 'run-command.bat'
+        mimeType = 'application/x-bat'
+        scriptContent = `@echo off\nchcp 65001 > nul\n${cmd}\npause\n`
+      } else if (os === 'mac' || os === 'linux') {
+        // Create a shell script for Mac/Linux
+        filename = 'run-command.sh'
+        mimeType = 'text/plain'
+        scriptContent = `#!/bin/bash\n${cmd}\nread -p "Press Enter to close..."\n`
+      } else {
+        showResult('error', 'Unable to create script for your operating system')
+        return
+      }
+
+      // Create blob and download
+      const blob = new Blob([scriptContent], { type: mimeType })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+
+      showResult('success', `Downloaded ${filename}. Double-click to run in terminal.`)
+    } catch (error) {
+      console.error('Failed to create terminal script:', error)
+      showResult('error', 'Failed to create script file. Please copy the command manually.')
     }
   }
 
@@ -133,7 +212,6 @@ function QuickActions({ hideHeader = false }) {
 
   // Define all action handlers
   const handlers = {
-    // Existing handlers
     'system-check': () => confirmAction('system-check', handleSystemCheck),
     'disk-space': () => showInstructions('Check Disk Space', 'Run these commands to check disk space on your system:', {
       windows: 'wmic logicaldisk get size,freespace,caption',
@@ -165,8 +243,6 @@ function QuickActions({ hideHeader = false }) {
       mac: 'sudo diskutil verifyVolume /',
       linux: 'sudo fsck -f /dev/sda1'
     }),
-
-    // Network & Connectivity
     'view-ip-config': () => showInstructions('View IP Configuration', 'View your current IP address, subnet, gateway, and DNS servers:', {
       windows: 'ipconfig /all',
       mac: 'ifconfig',
@@ -192,8 +268,6 @@ function QuickActions({ hideHeader = false }) {
       mac: 'ifconfig -a',
       linux: 'ifconfig -a'
     }),
-
-    // System Diagnostics
     'view-system-info': () => showInstructions('View System Information', 'Display OS version, hardware specs, and system details:', {
       windows: 'systeminfo',
       mac: 'system_profiler SPHardwareDataType',
@@ -224,8 +298,6 @@ function QuickActions({ hideHeader = false }) {
       mac: 'diskutil verifyDisk disk0',
       linux: 'sudo badblocks -v /dev/sda'
     }),
-
-    // Security & Permissions
     'check-firewall': () => showInstructions('Check Firewall Status', 'View firewall configuration and status:', {
       windows: 'netsh advfirewall show allprofiles',
       mac: 'sudo /usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate',
@@ -246,8 +318,6 @@ function QuickActions({ hideHeader = false }) {
       mac: 'Built-in security scan: System Preferences > Security & Privacy',
       linux: 'clamscan -r /home'
     }),
-
-    // Storage & Files
     'find-large-files': () => showInstructions('Find Large Files', 'Locate files taking up disk space:', {
       windows: 'forfiles /p C:\\ /s /m *.* /c "cmd /c if @fsize gtr 1000000000 echo @path @fsize"',
       mac: 'find / -type f -size +1G 2>/dev/null',
@@ -268,8 +338,6 @@ function QuickActions({ hideHeader = false }) {
       mac: 'iostat -x 1',
       linux: 'iostat -x 1'
     }),
-
-    // Performance Tools
     'view-cpu-memory': () => showInstructions('View CPU/Memory Usage', 'Monitor real-time resource usage:', {
       windows: 'taskmgr',
       mac: 'top',
@@ -289,7 +357,6 @@ function QuickActions({ hideHeader = false }) {
 
   // Define all actions with categories
   const allActions = [
-    // Network & Connectivity
     { id: 'view-ip-config', label: 'View IP Configuration', icon: Globe, color: 'blue', category: 'network', description: 'Show IP address, subnet, gateway, DNS' },
     { id: 'network-test', label: 'Network Test', icon: Wifi, color: 'green', category: 'network', description: 'Test network connectivity' },
     { id: 'check-open-ports', label: 'Check Open Ports', icon: Shield, color: 'green', category: 'network', description: 'See which ports are listening' },
@@ -297,8 +364,6 @@ function QuickActions({ hideHeader = false }) {
     { id: 'flush-dns', label: 'Flush DNS', icon: RefreshCw, color: 'purple', category: 'network', description: 'Clear DNS cache' },
     { id: 'release-renew-ip', label: 'Release/Renew IP', icon: RefreshCw, color: 'orange', category: 'network', description: 'Reset network configuration', requiresConfirmation: true, confirmationMessage: 'This will reset your network configuration. Continue?' },
     { id: 'check-network-adapter', label: 'Network Adapter Status', icon: Activity, color: 'blue', category: 'network', description: 'View network interfaces status' },
-
-    // System Diagnostics
     { id: 'system-check', label: 'Run System Check', icon: Activity, color: 'blue', category: 'system', description: 'Check system health and detect issues', requiresConfirmation: true, confirmationMessage: 'This will run a comprehensive system health check. Continue?' },
     { id: 'view-system-info', label: 'View System Information', icon: Monitor, color: 'blue', category: 'system', description: 'Display OS version and hardware specs' },
     { id: 'view-processes', label: 'View Running Processes', icon: List, color: 'orange', category: 'system', description: 'Show all running processes' },
@@ -308,22 +373,16 @@ function QuickActions({ hideHeader = false }) {
     { id: 'system-file-check', label: 'System File Check', icon: Terminal, color: 'orange', category: 'system', description: 'Check and repair system files' },
     { id: 'check-disk-health', label: 'Check Disk Health', icon: HardDrive, color: 'orange', category: 'system', description: 'Analyze disk health', requiresConfirmation: true, confirmationMessage: 'Disk health check may take a long time. Continue?' },
     { id: 'restart-service', label: 'Restart Service', icon: RefreshCw, color: 'blue', category: 'system', description: 'Restart a system service' },
-
-    // Security & Permissions
     { id: 'check-firewall', label: 'Check Firewall Status', icon: Shield, color: 'red', category: 'security', description: 'View firewall configuration' },
     { id: 'view-user-accounts', label: 'View User Accounts', icon: Users, color: 'blue', category: 'security', description: 'List all user accounts' },
     { id: 'check-file-permissions', label: 'Check File Permissions', icon: Shield, color: 'orange', category: 'security', description: 'View file permissions' },
     { id: 'scan-malware', label: 'Scan for Malware', icon: Shield, color: 'red', category: 'security', description: 'Quick security scan instructions' },
-
-    // Storage Management
     { id: 'disk-space', label: 'Check Disk Space', icon: HardDrive, color: 'orange', category: 'storage', description: 'View disk usage and free space' },
     { id: 'find-large-files', label: 'Find Large Files', icon: Search, color: 'orange', category: 'storage', description: 'Locate files taking up space' },
     { id: 'clear-temp-files', label: 'Clear Temp Files', icon: Trash2, color: 'red', category: 'storage', description: 'Clean temporary files', requiresConfirmation: true, confirmationMessage: 'This will delete temporary files. Continue?' },
     { id: 'view-disk-usage', label: 'View Disk Usage', icon: Folder, color: 'orange', category: 'storage', description: 'See folders using most space' },
     { id: 'check-disk-io', label: 'Check Disk I/O', icon: Activity, color: 'blue', category: 'storage', description: 'Monitor disk read/write activity' },
     { id: 'clear-cache', label: 'Clear Cache', icon: Trash2, color: 'red', category: 'storage', description: 'Clear browser cache' },
-
-    // Performance Tools
     { id: 'view-cpu-memory', label: 'View CPU/Memory', icon: Cpu, color: 'green', category: 'performance', description: 'Monitor resource usage' },
     { id: 'check-startup-programs', label: 'Startup Programs', icon: Play, color: 'blue', category: 'performance', description: 'View startup programs' },
     { id: 'optimize-disk', label: 'Optimize Disk', icon: HardDrive, color: 'green', category: 'performance', description: 'Defragment or optimize disk', requiresConfirmation: true, confirmationMessage: 'Disk optimization may take a long time. Continue?' }
@@ -384,6 +443,7 @@ function QuickActions({ hideHeader = false }) {
       }
     }
   }
+
 
   return (
     <div className="quick-actions-widget">
@@ -555,27 +615,50 @@ function QuickActions({ hideHeader = false }) {
               <p className="modal-description">{modalContent.content}</p>
               {modalContent.command && (
                 <div className="commands-list">
-                  {Object.entries(modalContent.command).map(([platform, cmd]) => (
-                    <div key={platform} className="command-item">
-                      <div className="command-header">
-                        <span className="platform-label">{platform.charAt(0).toUpperCase() + platform.slice(1)}</span>
-                        <button
-                          className="copy-command-btn"
-                          onClick={() => copyToClipboard(cmd)}
-                          title="Copy command"
-                        >
-                          <Copy size={14} />
-                          Copy
-                        </button>
+                  {Object.entries(modalContent.command).map(([platform, cmd]) => {
+                    const detectedOS = detectOS()
+                    const isCurrentOS = platform.toLowerCase() === detectedOS
+                    
+                    return (
+                      <div key={platform} className={`command-item ${isCurrentOS ? 'current-os' : ''}`}>
+                        <div className="command-header">
+                          <div className="platform-info">
+                            <span className="platform-label">
+                              {platform.charAt(0).toUpperCase() + platform.slice(1)}
+                              {isCurrentOS && <span className="os-badge">Your OS</span>}
+                            </span>
+                          </div>
+                          <div className="command-actions">
+                            <button
+                              className="copy-command-btn"
+                              onClick={() => copyToClipboard(cmd)}
+                              title="Copy command to clipboard"
+                            >
+                              <Copy size={14} />
+                              Copy
+                            </button>
+                            <button
+                              className="open-terminal-btn"
+                              onClick={() => openTerminalWithCommand(cmd, platform.toLowerCase())}
+                              title="Download and run script in terminal"
+                            >
+                              <Terminal size={14} />
+                              Open Terminal
+                            </button>
+                          </div>
+                        </div>
+                        <code className="command-code">{cmd}</code>
                       </div>
-                      <code className="command-code">{cmd}</code>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
               <div className="modal-info">
                 <Info size={16} />
-                <span>Note: Some commands may require administrator/sudo privileges</span>
+                <span>
+                  <strong>Tips:</strong> Click "Copy" to copy the command to clipboard, or "Open Terminal" to download a script file that will run the command. 
+                  Some commands may require administrator/sudo privileges.
+                </span>
               </div>
             </div>
           </div>
