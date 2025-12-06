@@ -223,6 +223,7 @@
   padding: var(--space-lg);
   background: var(--color-bg-hover);
   border: 2px solid var(--color-border-primary);
+  border-radius: 0;
   cursor: pointer;
   transition: all var(--transition-base);
   color: var(--color-text-primary);
