@@ -601,8 +601,7 @@
 }
 
 .copy-command-btn,
-.open-terminal-btn,
-.download-script-btn {
+.open-terminal-btn {
   display: flex;
   align-items: center;
   gap: var(--space-xs);
@@ -634,17 +633,6 @@
 
 .open-terminal-btn:hover {
   background: #10b981;
-  color: white;
-}
-
-.download-script-btn {
-  background: rgba(139, 92, 246, 0.1);
-  border-color: #8b5cf6;
-  color: #8b5cf6;
-}
-
-.download-script-btn:hover {
-  background: #8b5cf6;
   color: white;
 }
 

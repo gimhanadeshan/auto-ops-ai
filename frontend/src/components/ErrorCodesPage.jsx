@@ -1,49 +1,20 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { Search, AlertCircle, Info, Wrench, Monitor, Apple, Terminal } from 'lucide-react'
-import { staticDataService } from '../services/staticDataService'
+import { errorCodes, searchErrorCodes } from '../data/errorCodes'
 import '../styles/components/ErrorCodesPage.css'
 
 function ErrorCodesPage() {
   const [activeTab, setActiveTab] = useState('windows')
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedError, setSelectedError] = useState(null)
-  const [errorCodes, setErrorCodes] = useState(null)
-  const [loading, setLoading] = useState(true)
-
-  // Load error codes from backend
-  useEffect(() => {
-    const loadErrorCodes = async () => {
-      try {
-        setLoading(true)
-        const data = await staticDataService.getErrorCodes()
-        setErrorCodes(data)
-      } catch (error) {
-        console.error('Failed to load error codes:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-    loadErrorCodes()
-  }, [])
-
-  // Search function to filter error codes
-  const searchErrorCodes = (query, platform) => {
-    if (!errorCodes || !errorCodes[platform]) return []
-    const queryLower = query.toLowerCase()
-    return errorCodes[platform].filter(error => {
-      const searchText = `${error.code} ${error.name} ${error.description} ${error.potentialReason}`.toLowerCase()
-      return searchText.includes(queryLower)
-    })
-  }
 
   // Filter error codes based on search query
   const filteredErrors = useMemo(() => {
-    if (!errorCodes) return []
     if (!searchQuery.trim()) {
       return errorCodes[activeTab] || []
     }
     return searchErrorCodes(searchQuery, activeTab)
-  }, [searchQuery, activeTab, errorCodes])
+  }, [searchQuery, activeTab])
 
   const handleErrorSelect = (error) => {
     setSelectedError(error)
@@ -78,28 +49,6 @@ function ErrorCodesPage() {
     { id: 'mac', label: 'macOS', icon: Apple },
     { id: 'linux', label: 'Linux', icon: Terminal }
   ]
-
-  if (loading) {
-    return (
-      <div className="error-codes-container">
-        <div className="error-codes-header">
-          <div className="header-content">
-            <div className="header-icon">
-              <AlertCircle size={32} />
-            </div>
-            <div>
-              <h1>Error Codes Reference</h1>
-              <p>Loading error codes...</p>
-            </div>
-          </div>
-        </div>
-        <div style={{ padding: '40px', textAlign: 'center' }}>
-          <Info size={48} />
-          <p>Loading error codes data...</p>
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="error-codes-container">

@@ -26,11 +26,9 @@ import {
   Settings,
   FileText,
   Star,
-  XCircle,
-  Download
+  XCircle
 } from 'lucide-react'
 import { monitoringService } from '../services/monitoringService'
-import { staticDataService } from '../services/staticDataService'
 import '../styles/components/QuickActions.css'
 
 const STORAGE_KEY_RECENTLY_USED = 'quickActions_recentlyUsed'
@@ -79,34 +77,6 @@ function QuickActions({ hideHeader = false }) {
   const [pendingAction, setPendingAction] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [recentlyUsed, setRecentlyUsed] = useState([])
-  const [actionsData, setActionsData] = useState(null)
-  const [loadingData, setLoadingData] = useState(true)
-
-  // Load actions data from backend
-  useEffect(() => {
-    const loadActionsData = async () => {
-      try {
-        setLoadingData(true)
-        console.log('Loading quick actions from backend...')
-        const data = await staticDataService.getQuickActions()
-        console.log('Quick actions data loaded:', data)
-        if (data && data.actions && Array.isArray(data.actions)) {
-          setActionsData(data)
-          console.log(`Loaded ${data.actions.length} actions`)
-        } else {
-          console.error('Invalid data structure:', data)
-          setActionsData(null)
-        }
-      } catch (error) {
-        console.error('Failed to load quick actions data:', error)
-        console.error('Error details:', error.message, error.stack)
-        setActionsData(null)
-      } finally {
-        setLoadingData(false)
-      }
-    }
-    loadActionsData()
-  }, [])
 
   // Load recently used actions from localStorage
   useEffect(() => {
@@ -136,86 +106,47 @@ function QuickActions({ hideHeader = false }) {
     }
   }
 
-  // Download a script file that opens terminal and runs command
-  const downloadTerminalScript = (command, platform) => {
-    let scriptContent = ''
-    let filename = ''
-    let mimeType = ''
-
-    if (platform === 'windows') {
-      // Create a batch file
-      filename = 'run-command.bat'
-      mimeType = 'application/x-bat'
-      scriptContent = `@echo off\nchcp 65001 > nul\ncmd /k "${command}"\npause\n`
-    } else if (platform === 'mac') {
-      // Create a shell script
-      filename = 'run-command.sh'
-      mimeType = 'text/plain'
-      scriptContent = `#!/bin/bash\n${command}\nread -p "Press Enter to close..."\n`
-    } else if (platform === 'linux') {
-      // Create a shell script
-      filename = 'run-command.sh'
-      mimeType = 'text/plain'
-      scriptContent = `#!/bin/bash\n${command}\nread -p "Press Enter to close..."\n`
-    } else {
-      showResult('error', 'Unable to create script for your operating system')
-      return
-    }
-
-    // Create blob and download
-    const blob = new Blob([scriptContent], { type: mimeType })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = filename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
-
-    showResult('success', `Downloaded ${filename}. Double-click to run in terminal.`)
-  }
-
-  // Attempt to open terminal with command (works in limited scenarios)
+  // Open terminal with command by downloading and running a script
   const openTerminalWithCommand = async (command, platform) => {
     const detectedOS = detectOS()
     const os = platform || detectedOS
     const cmd = command
 
+    let scriptContent = ''
+    let filename = ''
+    let mimeType = ''
+
     try {
       if (os === 'windows') {
-        // For Windows, try to use PowerShell or CMD
-        // Create a temporary batch file and execute it
-        const batchContent = `@echo off\nchcp 65001 > nul\n${cmd}\npause\n`
-        const blob = new Blob([batchContent], { type: 'application/x-bat' })
-        const url = URL.createObjectURL(blob)
-        
-        // Try to open with Windows shell
-        // Note: This may not work in all browsers due to security restrictions
-        const link = document.createElement('a')
-        link.href = url
-        link.download = 'run-command.bat'
-        link.style.display = 'none'
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-        
-        showResult('success', 'Downloaded batch file. Double-click to run in terminal, or use PowerShell/CMD.')
-      } else if (os === 'mac') {
-        // For Mac, use AppleScript via data URI (limited support)
-        // Better approach: download script file
-        downloadTerminalScript(cmd, 'mac')
-      } else if (os === 'linux') {
-        // For Linux, download shell script
-        downloadTerminalScript(cmd, 'linux')
+        // Create a batch file for Windows
+        filename = 'run-command.bat'
+        mimeType = 'application/x-bat'
+        scriptContent = `@echo off\nchcp 65001 > nul\n${cmd}\npause\n`
+      } else if (os === 'mac' || os === 'linux') {
+        // Create a shell script for Mac/Linux
+        filename = 'run-command.sh'
+        mimeType = 'text/plain'
+        scriptContent = `#!/bin/bash\n${cmd}\nread -p "Press Enter to close..."\n`
       } else {
-        // Fallback: download script
-        downloadTerminalScript(cmd, detectedOS)
+        showResult('error', 'Unable to create script for your operating system')
+        return
       }
+
+      // Create blob and download
+      const blob = new Blob([scriptContent], { type: mimeType })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+
+      showResult('success', `Downloaded ${filename}. Double-click to run in terminal.`)
     } catch (error) {
-      console.error('Failed to open terminal:', error)
-      // Fallback to downloading script
-      downloadTerminalScript(cmd, os)
+      console.error('Failed to create terminal script:', error)
+      showResult('error', 'Failed to create script file. Please copy the command manually.')
     }
   }
 
@@ -279,67 +210,192 @@ function QuickActions({ hideHeader = false }) {
     }
   }
 
-  // Build handlers dynamically from backend data
-  const buildHandlers = () => {
-    if (!actionsData) return {}
-    
-    const handlersObj = {}
-    
-    actionsData.actions.forEach(action => {
-      if (action.type === 'api' && action.id === 'system-check') {
-        handlersObj[action.id] = () => confirmAction('system-check', handleSystemCheck)
-      } else if (action.type === 'instructions' && action.instructions) {
-        handlersObj[action.id] = () => {
-          const inst = action.instructions
-          showInstructions(inst.title, inst.description, inst.commands)
-        }
-      }
-    })
-    
-    return handlersObj
+  // Define all action handlers
+  const handlers = {
+    'system-check': () => confirmAction('system-check', handleSystemCheck),
+    'disk-space': () => showInstructions('Check Disk Space', 'Run these commands to check disk space on your system:', {
+      windows: 'wmic logicaldisk get size,freespace,caption',
+      mac: 'df -h',
+      linux: 'df -h'
+    }),
+    'network-test': () => showInstructions('Network Connectivity Test', 'Test your network connectivity with these commands:', {
+      windows: 'ping google.com -n 4',
+      mac: 'ping -c 4 google.com',
+      linux: 'ping -c 4 google.com'
+    }),
+    'flush-dns': () => showInstructions('Flush DNS Cache', 'Clear your DNS cache to resolve connectivity issues:', {
+      windows: 'ipconfig /flushdns',
+      mac: 'sudo dscacheutil -flushcache && sudo killall -HUP mDNSResponder',
+      linux: 'sudo systemd-resolve --flush-caches'
+    }),
+    'clear-cache': () => showInstructions('Clear Browser Cache', 'Clear your browser cache to resolve loading issues:', {
+      chrome: 'Press Ctrl+Shift+Delete (Windows) or Cmd+Shift+Delete (Mac)',
+      firefox: 'Press Ctrl+Shift+Delete (Windows) or Cmd+Shift+Delete (Mac)',
+      edge: 'Press Ctrl+Shift+Delete (Windows) or Cmd+Shift+Delete (Mac)'
+    }),
+    'restart-service': () => showInstructions('Restart Service', 'Restart a service using these commands:', {
+      windows: 'net stop "ServiceName" && net start "ServiceName"',
+      mac: 'sudo launchctl stop com.service.name && sudo launchctl start com.service.name',
+      linux: 'sudo systemctl restart service-name'
+    }),
+    'system-file-check': () => showInstructions('System File Checker', 'Check and repair system files:', {
+      windows: 'sfc /scannow',
+      mac: 'sudo diskutil verifyVolume /',
+      linux: 'sudo fsck -f /dev/sda1'
+    }),
+    'view-ip-config': () => showInstructions('View IP Configuration', 'View your current IP address, subnet, gateway, and DNS servers:', {
+      windows: 'ipconfig /all',
+      mac: 'ifconfig',
+      linux: 'ip addr'
+    }),
+    'check-open-ports': () => showInstructions('Check Open Ports', 'See which ports are listening or in use:', {
+      windows: 'netstat -ano',
+      mac: 'netstat -an',
+      linux: 'ss -tuln'
+    }),
+    'trace-route': () => showInstructions('Trace Route', 'Trace the network path to a host:', {
+      windows: 'tracert google.com',
+      mac: 'traceroute google.com',
+      linux: 'traceroute google.com'
+    }),
+    'release-renew-ip': () => showInstructions('Release/Renew IP Address', 'Reset your network configuration:', {
+      windows: 'ipconfig /release && ipconfig /renew',
+      mac: 'sudo ipconfig set en0 DHCP',
+      linux: 'sudo dhclient -r && sudo dhclient'
+    }),
+    'check-network-adapter': () => showInstructions('Check Network Adapter Status', 'View all network interfaces and their status:', {
+      windows: 'netsh interface show interface',
+      mac: 'ifconfig -a',
+      linux: 'ifconfig -a'
+    }),
+    'view-system-info': () => showInstructions('View System Information', 'Display OS version, hardware specs, and system details:', {
+      windows: 'systeminfo',
+      mac: 'system_profiler SPHardwareDataType',
+      linux: 'uname -a && lscpu && free -h'
+    }),
+    'view-processes': () => showInstructions('View Running Processes', 'Show all running processes with CPU/memory usage:', {
+      windows: 'tasklist',
+      mac: 'ps aux',
+      linux: 'ps aux'
+    }),
+    'kill-process': () => showInstructions('Kill Process by Name', 'Terminate a stuck or frozen process. Use with caution!', {
+      windows: 'taskkill /F /IM processname.exe',
+      mac: 'killall processname',
+      linux: 'pkill processname'
+    }),
+    'check-uptime': () => showInstructions('Check System Uptime', 'Show how long your system has been running:', {
+      windows: 'systeminfo | findstr /B /C:"System Boot Time"',
+      mac: 'uptime',
+      linux: 'uptime'
+    }),
+    'view-event-logs': () => showInstructions('View Event Logs', 'Access system event logs for troubleshooting:', {
+      windows: 'eventvwr.msc',
+      mac: 'log show --predicate \'eventMessage contains "error"\' --last 1h',
+      linux: 'journalctl -n 50'
+    }),
+    'check-disk-health': () => showInstructions('Check Disk Health', 'Analyze disk health and check for bad sectors. This may take time:', {
+      windows: 'chkdsk C: /f',
+      mac: 'diskutil verifyDisk disk0',
+      linux: 'sudo badblocks -v /dev/sda'
+    }),
+    'check-firewall': () => showInstructions('Check Firewall Status', 'View firewall configuration and status:', {
+      windows: 'netsh advfirewall show allprofiles',
+      mac: 'sudo /usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate',
+      linux: 'sudo ufw status'
+    }),
+    'view-user-accounts': () => showInstructions('View User Accounts', 'List all user accounts on the system:', {
+      windows: 'net user',
+      mac: 'dscl . list /Users',
+      linux: 'cat /etc/passwd | cut -d: -f1'
+    }),
+    'check-file-permissions': () => showInstructions('Check File Permissions', 'View or modify file permissions (troubleshooting access issues):', {
+      windows: 'icacls "C:\\path\\to\\file"',
+      mac: 'ls -la /path/to/file',
+      linux: 'ls -la /path/to/file'
+    }),
+    'scan-malware': () => showInstructions('Scan for Malware', 'Quick security scan instructions:', {
+      windows: 'Windows Defender: Open Windows Security > Virus & threat protection > Quick scan',
+      mac: 'Built-in security scan: System Preferences > Security & Privacy',
+      linux: 'clamscan -r /home'
+    }),
+    'find-large-files': () => showInstructions('Find Large Files', 'Locate files taking up disk space:', {
+      windows: 'forfiles /p C:\\ /s /m *.* /c "cmd /c if @fsize gtr 1000000000 echo @path @fsize"',
+      mac: 'find / -type f -size +1G 2>/dev/null',
+      linux: 'find / -type f -size +1G 2>/dev/null'
+    }),
+    'clear-temp-files': () => confirmAction('clear-temp-files', () => showInstructions('Clear Temp Files', 'Clean temporary files to free up disk space:', {
+      windows: 'del /q/f/s %TEMP%\\*',
+      mac: 'rm -rf ~/Library/Caches/*',
+      linux: 'sudo rm -rf /tmp/*'
+    }), 'This will delete temporary files. Continue?'),
+    'view-disk-usage': () => showInstructions('View Disk Usage by Folder', 'See which folders use the most space:', {
+      windows: 'wmic logicaldisk get size,freespace,caption',
+      mac: 'du -sh /* | sort -h',
+      linux: 'du -sh /* | sort -h'
+    }),
+    'check-disk-io': () => showInstructions('Check Disk I/O', 'Monitor disk read/write activity:', {
+      windows: 'typeperf "\\PhysicalDisk(*)\\Disk Reads/sec"',
+      mac: 'iostat -x 1',
+      linux: 'iostat -x 1'
+    }),
+    'view-cpu-memory': () => showInstructions('View CPU/Memory Usage', 'Monitor real-time resource usage:', {
+      windows: 'taskmgr',
+      mac: 'top',
+      linux: 'top'
+    }),
+    'check-startup-programs': () => showInstructions('Check Startup Programs', 'View programs that start with the system:', {
+      windows: 'msconfig',
+      mac: 'System Preferences > Users & Groups > Login Items',
+      linux: 'systemctl list-unit-files | grep enabled'
+    }),
+    'optimize-disk': () => confirmAction('optimize-disk', () => showInstructions('Optimize Disk', 'Defragment or optimize your disk:', {
+      windows: 'defrag C: /O',
+      mac: 'sudo trimforce enable',
+      linux: 'sudo fstrim -av'
+    }), 'Disk optimization may take a long time. Continue?')
   }
 
-  // Define all action handlers - built dynamically from backend data
-  const handlers = useMemo(() => buildHandlers(), [actionsData])
+  // Define all actions with categories
+  const allActions = [
+    { id: 'view-ip-config', label: 'View IP Configuration', icon: Globe, color: 'blue', category: 'network', description: 'Show IP address, subnet, gateway, DNS' },
+    { id: 'network-test', label: 'Network Test', icon: Wifi, color: 'green', category: 'network', description: 'Test network connectivity' },
+    { id: 'check-open-ports', label: 'Check Open Ports', icon: Shield, color: 'green', category: 'network', description: 'See which ports are listening' },
+    { id: 'trace-route', label: 'Trace Route', icon: MapPin, color: 'purple', category: 'network', description: 'Trace network path to host' },
+    { id: 'flush-dns', label: 'Flush DNS', icon: RefreshCw, color: 'purple', category: 'network', description: 'Clear DNS cache' },
+    { id: 'release-renew-ip', label: 'Release/Renew IP', icon: RefreshCw, color: 'orange', category: 'network', description: 'Reset network configuration', requiresConfirmation: true, confirmationMessage: 'This will reset your network configuration. Continue?' },
+    { id: 'check-network-adapter', label: 'Network Adapter Status', icon: Activity, color: 'blue', category: 'network', description: 'View network interfaces status' },
+    { id: 'system-check', label: 'Run System Check', icon: Activity, color: 'blue', category: 'system', description: 'Check system health and detect issues', requiresConfirmation: true, confirmationMessage: 'This will run a comprehensive system health check. Continue?' },
+    { id: 'view-system-info', label: 'View System Information', icon: Monitor, color: 'blue', category: 'system', description: 'Display OS version and hardware specs' },
+    { id: 'view-processes', label: 'View Running Processes', icon: List, color: 'orange', category: 'system', description: 'Show all running processes' },
+    { id: 'kill-process', label: 'Kill Process', icon: XCircle, color: 'red', category: 'system', description: 'Terminate a stuck process', requiresConfirmation: true, confirmationMessage: 'Warning: This will force-terminate a process. Continue?' },
+    { id: 'check-uptime', label: 'Check System Uptime', icon: Clock, color: 'green', category: 'system', description: 'Show system uptime' },
+    { id: 'view-event-logs', label: 'View Event Logs', icon: FileText, color: 'orange', category: 'system', description: 'Access system event logs' },
+    { id: 'system-file-check', label: 'System File Check', icon: Terminal, color: 'orange', category: 'system', description: 'Check and repair system files' },
+    { id: 'check-disk-health', label: 'Check Disk Health', icon: HardDrive, color: 'orange', category: 'system', description: 'Analyze disk health', requiresConfirmation: true, confirmationMessage: 'Disk health check may take a long time. Continue?' },
+    { id: 'restart-service', label: 'Restart Service', icon: RefreshCw, color: 'blue', category: 'system', description: 'Restart a system service' },
+    { id: 'check-firewall', label: 'Check Firewall Status', icon: Shield, color: 'red', category: 'security', description: 'View firewall configuration' },
+    { id: 'view-user-accounts', label: 'View User Accounts', icon: Users, color: 'blue', category: 'security', description: 'List all user accounts' },
+    { id: 'check-file-permissions', label: 'Check File Permissions', icon: Shield, color: 'orange', category: 'security', description: 'View file permissions' },
+    { id: 'scan-malware', label: 'Scan for Malware', icon: Shield, color: 'red', category: 'security', description: 'Quick security scan instructions' },
+    { id: 'disk-space', label: 'Check Disk Space', icon: HardDrive, color: 'orange', category: 'storage', description: 'View disk usage and free space' },
+    { id: 'find-large-files', label: 'Find Large Files', icon: Search, color: 'orange', category: 'storage', description: 'Locate files taking up space' },
+    { id: 'clear-temp-files', label: 'Clear Temp Files', icon: Trash2, color: 'red', category: 'storage', description: 'Clean temporary files', requiresConfirmation: true, confirmationMessage: 'This will delete temporary files. Continue?' },
+    { id: 'view-disk-usage', label: 'View Disk Usage', icon: Folder, color: 'orange', category: 'storage', description: 'See folders using most space' },
+    { id: 'check-disk-io', label: 'Check Disk I/O', icon: Activity, color: 'blue', category: 'storage', description: 'Monitor disk read/write activity' },
+    { id: 'clear-cache', label: 'Clear Cache', icon: Trash2, color: 'red', category: 'storage', description: 'Clear browser cache' },
+    { id: 'view-cpu-memory', label: 'View CPU/Memory', icon: Cpu, color: 'green', category: 'performance', description: 'Monitor resource usage' },
+    { id: 'check-startup-programs', label: 'Startup Programs', icon: Play, color: 'blue', category: 'performance', description: 'View startup programs' },
+    { id: 'optimize-disk', label: 'Optimize Disk', icon: HardDrive, color: 'green', category: 'performance', description: 'Defragment or optimize disk', requiresConfirmation: true, confirmationMessage: 'Disk optimization may take a long time. Continue?' }
+  ]
 
-  // Process actions data from backend
-  const allActions = useMemo(() => {
-    if (!actionsData || !actionsData.actions) {
-      console.log('No actionsData or actionsData.actions:', actionsData)
-      return []
-    }
-    
-    const processed = actionsData.actions.map(action => ({
-      ...action,
-      icon: iconMap[action.icon] || Activity, // Fallback to Activity if icon not found
-      requiresConfirmation: action.requiresConfirmation || false
-    }))
-    
-    console.log('Processed actions:', processed.length, processed)
-    return processed
-  }, [actionsData])
-
-  // Category labels and icons from backend
-  const categories = useMemo(() => {
-    if (!actionsData || !actionsData.categories) {
-      return {
-        network: { label: 'Network & Connectivity', icon: Wifi },
-        system: { label: 'System Diagnostics', icon: Monitor },
-        security: { label: 'Security & Permissions', icon: Shield },
-        storage: { label: 'Storage Management', icon: HardDrive },
-        performance: { label: 'Performance Tools', icon: Cpu }
-      }
-    }
-    
-    const cats = {}
-    Object.entries(actionsData.categories).forEach(([key, value]) => {
-      cats[key] = {
-        label: value.label,
-        icon: iconMap[value.icon] || Monitor
-      }
-    })
-    return cats
-  }, [actionsData])
+  // Category labels and icons
+  const categories = {
+    network: { label: 'Network & Connectivity', icon: Wifi },
+    system: { label: 'System Diagnostics', icon: Monitor },
+    security: { label: 'Security & Permissions', icon: Shield },
+    storage: { label: 'Storage Management', icon: HardDrive },
+    performance: { label: 'Performance Tools', icon: Cpu }
+  }
 
   // Filter actions based on search query
   const filteredActions = useMemo(() => {
@@ -350,7 +406,7 @@ function QuickActions({ hideHeader = false }) {
       action.description.toLowerCase().includes(query) ||
       action.category.toLowerCase().includes(query)
     )
-  }, [searchQuery, allActions])
+  }, [searchQuery])
 
   // Group actions by category
   const actionsByCategory = useMemo(() => {
@@ -366,12 +422,11 @@ function QuickActions({ hideHeader = false }) {
 
   // Get recently used actions (limit to 5)
   const recentActions = useMemo(() => {
-    if (!allActions || allActions.length === 0) return []
     return recentlyUsed
       .map(id => allActions.find(a => a.id === id))
       .filter(Boolean)
       .slice(0, 5)
-  }, [recentlyUsed, allActions])
+  }, [recentlyUsed])
 
   // Execute action with tracking
   const executeAction = (action) => {
@@ -389,77 +444,6 @@ function QuickActions({ hideHeader = false }) {
     }
   }
 
-  // Show loading state while fetching data
-  if (loadingData) {
-    return (
-      <div className="quick-actions-widget">
-        <div className="widget-header">
-          <div>
-            <h2>Quick Actions</h2>
-            <p>Loading actions...</p>
-          </div>
-        </div>
-        <div style={{ padding: '20px', textAlign: 'center' }}>
-          <RefreshCw size={24} className="spinning" />
-        </div>
-      </div>
-    )
-  }
-
-  // Show error state if data failed to load or is invalid
-  if (!actionsData || !actionsData.actions || !Array.isArray(actionsData.actions) || actionsData.actions.length === 0) {
-    return (
-      <div className="quick-actions-widget">
-        {!hideHeader && (
-          <div className="widget-header">
-            <div>
-              <h2>Quick Actions</h2>
-              <p>Common troubleshooting actions</p>
-            </div>
-          </div>
-        )}
-        <div style={{ padding: '40px', textAlign: 'center' }}>
-          <AlertCircle size={48} style={{ marginBottom: '16px', color: 'var(--color-danger)' }} />
-          <h3>No Actions Available</h3>
-          <p>
-            {!actionsData 
-              ? 'Failed to load quick actions data from the server. Please check your connection and try again.'
-              : 'Quick actions data is empty or invalid.'}
-          </p>
-          {actionsData && (
-            <p style={{ fontSize: '12px', color: '#666', marginTop: '8px' }}>
-              Debug: actionsData exists but actions array is {!actionsData.actions ? 'missing' : `empty (length: ${actionsData.actions?.length})`}
-            </p>
-          )}
-          <button 
-            onClick={() => {
-              setLoadingData(true)
-              staticDataService.getQuickActions()
-                .then(data => {
-                  console.log('Retry loaded data:', data)
-                  if (data && data.actions && Array.isArray(data.actions)) {
-                    setActionsData(data)
-                  } else {
-                    console.error('Invalid data structure on retry:', data)
-                    setActionsData(null)
-                  }
-                  setLoadingData(false)
-                })
-                .catch(error => {
-                  console.error('Failed to load quick actions on retry:', error)
-                  setActionsData(null)
-                  setLoadingData(false)
-                })
-            }}
-            style={{ marginTop: '16px', padding: '8px 16px' }}
-          >
-            <RefreshCw size={16} style={{ marginRight: '8px' }} />
-            Retry
-          </button>
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="quick-actions-widget">
@@ -656,18 +640,10 @@ function QuickActions({ hideHeader = false }) {
                             <button
                               className="open-terminal-btn"
                               onClick={() => openTerminalWithCommand(cmd, platform.toLowerCase())}
-                              title="Open terminal with this command"
+                              title="Download and run script in terminal"
                             >
                               <Terminal size={14} />
                               Open Terminal
-                            </button>
-                            <button
-                              className="download-script-btn"
-                              onClick={() => downloadTerminalScript(cmd, platform.toLowerCase())}
-                              title="Download script file to run later"
-                            >
-                              <Download size={14} />
-                              Download
                             </button>
                           </div>
                         </div>
@@ -680,8 +656,8 @@ function QuickActions({ hideHeader = false }) {
               <div className="modal-info">
                 <Info size={16} />
                 <span>
-                  <strong>Tips:</strong> Click "Copy" to copy the command, "Open Terminal" to download and run it, 
-                  or "Download" to save a script file for later. Some commands may require administrator/sudo privileges.
+                  <strong>Tips:</strong> Click "Copy" to copy the command to clipboard, or "Open Terminal" to download a script file that will run the command. 
+                  Some commands may require administrator/sudo privileges.
                 </span>
               </div>
             </div>
