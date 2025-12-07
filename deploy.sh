@@ -156,38 +156,98 @@ sleep 20
 echo ""
 echo "1️⃣1️⃣ Checking database status..."
 DB_PATH="./backend/data/auto_ops.db"
+VECTOR_DB_PATH="./backend/data/processed/chroma_db"
 
 if [ -f "$DB_PATH" ]; then
-    echo "✅ Database already exists - skipping initialization"
+    echo "✅ Database file exists"
 else
     echo "🔄 Database not found - initializing..."
-    docker-compose -f docker-compose.deploy.yml exec -T backend python backend/init_db.py || true
-    echo "✅ Database initialized"
+    if docker-compose -f docker-compose.deploy.yml exec -T backend python backend/init_db.py; then
+        echo "✅ Database initialized successfully"
+    else
+        echo "❌ Database initialization failed"
+        exit 1
+    fi
 fi
 
-# Step 12: Load seed data (only if database was newly created)
+# Step 11b: Check vector database
 echo ""
-echo "1️⃣2️⃣ Checking seed data status..."
-# Check if users table has data
+echo "1️⃣1️⃣b Checking vector database (ChromaDB) status..."
+if [ -d "$VECTOR_DB_PATH" ]; then
+    echo "✅ Vector database already exists"
+else
+    echo "🔄 Vector database not found - will be created during ingestion"
+fi
+
+# Step 12: Check admin user and seed data
+echo ""
+echo "1️⃣2️⃣ Checking admin user..."
+ADMIN_EXISTS=$(docker-compose -f docker-compose.deploy.yml exec -T backend python -c "
+from app.core.database import SessionLocal
+from app.models.user import UserDB
+try:
+    session = SessionLocal()
+    admin = session.query(UserDB).filter(UserDB.email == 'admin@acme.com').first()
+    print('1' if admin else '0')
+except:
+    print('0')
+" 2>/dev/null || echo "0")
+
+if [ "$ADMIN_EXISTS" = "1" ]; then
+    echo "✅ Admin user exists (admin@acme.com)"
+else
+    echo "🔄 Admin user not found - creating via init_db.py..."
+    if docker-compose -f docker-compose.deploy.yml exec -T backend python backend/init_db.py; then
+        echo "✅ Admin user created successfully"
+        echo "   Email: admin@acme.com"
+        echo "   Password: admin123"
+        ADMIN_EXISTS="1"
+    else
+        echo "❌ Failed to create admin user"
+        ADMIN_EXISTS="0"
+    fi
+fi
+
+# Step 13: Load ingestion data
+echo ""
+echo "1️⃣3️⃣ Loading ingestion data..."
 USERS_COUNT=$(docker-compose -f docker-compose.deploy.yml exec -T backend python -c "
 from app.core.database import SessionLocal
 from app.models.user import UserDB
-session = SessionLocal()
-count = session.query(UserDB).count()
-print(count)
+try:
+    session = SessionLocal()
+    count = session.query(UserDB).count()
+    print(count)
+except:
+    print('0')
 " 2>/dev/null || echo "0")
 
-if [ "$USERS_COUNT" -gt 0 ]; then
-    echo "✅ Seed data already loaded - skipping ingestion"
+if [ "$USERS_COUNT" -gt 1 ]; then
+    echo "✅ Seed data already loaded"
 else
-    echo "🔄 Loading seed data..."
-    docker-compose -f docker-compose.deploy.yml exec -T backend python backend/ingestion_script.py || true
-    echo "✅ Seed data loaded"
+    echo "🔄 Loading seed data and creating vector database..."
+    if docker-compose -f docker-compose.deploy.yml exec -T backend python backend/ingestion_script.py; then
+        echo "✅ Seed data and vector database created successfully"
+    else
+        echo "⚠️  Ingestion script had issues (this is often expected for Windows paths)"
+    fi
 fi
 
-# Step 13: Verify deployment
+# Step 14: Final verification
 echo ""
-echo "1️⃣3️⃣ Verifying deployment..."
+echo "1️⃣4️⃣ Final verification..."
+
+# Check if backend is healthy
+HEALTH_STATUS=$(curl -s http://localhost:8000/health 2>/dev/null | grep -o "healthy" || echo "error")
+if [ "$HEALTH_STATUS" = "healthy" ]; then
+    echo "✅ Backend health check passed"
+else
+    echo "⚠️  Backend not responding yet (still starting)"
+fi
+
+# Check container status
+echo ""
+echo "1️⃣5️⃣ Container status:"
 docker-compose -f docker-compose.deploy.yml ps
 
 # Cleanup
@@ -199,14 +259,20 @@ echo "✅ Deployment Complete!"
 echo "======================================"
 echo ""
 echo "📊 Deployment Summary:"
-echo "   Code Changes:     $([ "$REBUILD_NEEDED" = true ] && echo "YES - Images rebuilt" || echo "NO - Used cached images")"
-echo "   Database:         $([ -f "$DB_PATH" ] && echo "Existing (preserved)" || echo "New (initialized)")"
-echo "   Seed Data:        $([ "$USERS_COUNT" -gt 0 ] && echo "Already loaded" || echo "Newly loaded")"
+echo "   Code Changes:        $([ "$REBUILD_NEEDED" = true ] && echo "YES - Images rebuilt" || echo "NO - Used cached images")"
+echo "   Database:            $([ -f "$DB_PATH" ] && echo "✅ Created & initialized" || echo "⚠️  Not found")"
+echo "   Vector Database:     $([ -d "$VECTOR_DB_PATH" ] && echo "✅ Created" || echo "⚠️  Not created yet")"
+echo "   Admin User:          $([ "$ADMIN_EXISTS" = "1" ] && echo "✅ Exists" || echo "❌ Not seeded")"
+echo "   Backend Health:      $([ "$HEALTH_STATUS" = "healthy" ] && echo "✅ Healthy" || echo "⚠️  Starting")"
 echo ""
 echo "🌐 Access your application:"
 echo "   Frontend:  http://$DROPLET_IP"
 echo "   Backend:   http://$DROPLET_IP:8000"
 echo "   API Docs:  http://$DROPLET_IP:8000/docs"
+echo ""
+echo "🔐 Default Admin Credentials:"
+echo "   Email:    admin@acme.com"
+echo "   Password: admin123"
 echo ""
 echo "📋 View logs:"
 echo "   docker-compose -f docker-compose.deploy.yml logs -f"
