@@ -1,4 +1,4 @@
-name: CI/CD
+name: CI/CD Pipeline
 
 on:
   push:
@@ -8,6 +8,8 @@ on:
 
 env:
   REGISTRY: docker.io
+  BACKEND_IMAGE: ${{ secrets.DOCKER_HUB_USERNAME }}/auto-ops-ai-backend
+  FRONTEND_IMAGE: ${{ secrets.DOCKER_HUB_USERNAME }}/auto-ops-ai-frontend
 
 jobs:
   backend-tests:
@@ -24,8 +26,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
       - name: Run tests
-        run: |
-          pytest -q
+        run: pytest -q
 
   frontend-build:
     name: Frontend Build
@@ -36,167 +37,69 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Install frontend dependencies
+      - name: Install dependencies
         working-directory: ./frontend
-        run: |
-          npm install
+        run: npm install
       - name: Build frontend
         working-directory: ./frontend
-        run: |
-          npm run build
+        run: npm run build
 
   build-and-push:
     name: Build and Push Docker Images
     runs-on: ubuntu-latest
     needs: [backend-tests, frontend-build]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    permissions:
-      contents: read
-      packages: write
-    env:
-      IMAGE_NAME_BACKEND: ${{ secrets.DOCKER_HUB_USERNAME }}/auto-ops-ai-backend
-      IMAGE_NAME_FRONTEND: ${{ secrets.DOCKER_HUB_USERNAME }}/auto-ops-ai-frontend
     steps:
       - uses: actions/checkout@v4
-      
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_PASSWORD }}
-      
-      - name: Extract metadata (backend)
-        id: meta-backend
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.IMAGE_NAME_BACKEND }}
-          tags: |
-            type=ref,event=branch
-            type=sha,prefix={{branch}}-
-            type=raw,value=latest
-      
-      - name: Extract metadata (frontend)
-        id: meta-frontend
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.IMAGE_NAME_FRONTEND }}
-          tags: |
-            type=ref,event=branch
-            type=sha,prefix={{branch}}-
-            type=raw,value=latest
-      
-      - name: Build and push backend image
+      - name: Build and push backend
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile
           push: true
-          tags: ${{ steps.meta-backend.outputs.tags }}
-          labels: ${{ steps.meta-backend.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          no-cache: true
-      
-      - name: Build and push frontend image
+          tags: |
+            ${{ env.BACKEND_IMAGE }}:latest
+            ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+      - name: Build and push frontend
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
           file: ./frontend/dockerfile
           push: true
-          tags: ${{ steps.meta-frontend.outputs.tags }}
-          labels: ${{ steps.meta-frontend.outputs.labels }}
+          tags: |
+            ${{ env.FRONTEND_IMAGE }}:latest
+            ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
 
-  deploy-digital-ocean:
+  deploy:
     name: Deploy to Digital Ocean
     runs-on: ubuntu-latest
     needs: build-and-push
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Deploy to Digital Ocean via SSH
+      - name: Deploy via SSH and run deploy.sh
         uses: appleboy/ssh-action@v1.0.3
         env:
           DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
           DOCKER_HUB_PASSWORD: ${{ secrets.DOCKER_HUB_PASSWORD }}
-          GH_DEPLOY_TOKEN: ${{ secrets.GH_DEPLOY_TOKEN }}
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
         with:
           host: ${{ secrets.DIGITALOCEAN_HOST }}
           username: ${{ secrets.DIGITALOCEAN_USER }}
           key: ${{ secrets.DIGITALOCEAN_SSH_KEY }}
-          port: 22
           passphrase: ${{ secrets.DIGITALOCEAN_SSH_PASSPHRASE }}
-          envs: DOCKER_HUB_USERNAME,DOCKER_HUB_PASSWORD,GH_DEPLOY_TOKEN,GOOGLE_API_KEY
-          timeout: 30m
-          command_timeout: 10m
+          envs: DOCKER_HUB_USERNAME,DOCKER_HUB_PASSWORD,GOOGLE_API_KEY
+          script_stop: true
           script: |
-            # Create app directory if it doesn't exist
-            mkdir -p /app
-            cd /app
+            cd /app || mkdir -p /app && cd /app
+            git clone https://github.com/gimhanadeshan/auto-ops-ai.git . 2>/dev/null || git fetch origin main && git checkout -f origin/main
+            chmod +x deploy.sh
+            DOCKER_HUB_USERNAME=$DOCKER_HUB_USERNAME DOCKER_HUB_PASSWORD=$DOCKER_HUB_PASSWORD GOOGLE_API_KEY=$GOOGLE_API_KEY ./deploy.sh
 
-            # Ensure required tooling is present
-            if ! command -v docker >/dev/null 2>&1; then
-              echo "Docker is not installed. Run setup-droplet-deploy.sh on the droplet first." && exit 1
-            fi
-            if ! command -v docker-compose >/dev/null 2>&1; then
-              echo "docker-compose is not installed. Run setup-droplet-deploy.sh on the droplet first." && exit 1
-            fi
-            
-            # Initialize git repo if not already done
-            if [ ! -d .git ]; then
-              git init
-              git remote add origin https://github.com/gimhanadeshan/auto-ops-ai.git
-            fi
-            
-            # Pull latest code using GitHub token
-            git config credential.helper store
-            echo "https://x-access-token:${GH_DEPLOY_TOKEN}@github.com" > ~/.git-credentials
-            git fetch origin main
-            git checkout -f origin/main
-            rm -f ~/.git-credentials
-            
-            # Set variables inline
-            export DOCKER_HUB_USERNAME="${{ secrets.DOCKER_HUB_USERNAME }}"
-            export DOCKER_HUB_PASSWORD="${{ secrets.DOCKER_HUB_PASSWORD }}"
-            export GOOGLE_API_KEY="${{ secrets.GOOGLE_API_KEY }}"
-            export DROPLET_IP=$(hostname -I | awk '{print $1}')
-            
-            # Login to Docker
-            echo "$DOCKER_HUB_PASSWORD" | docker login -u "$DOCKER_HUB_USERNAME" --password-stdin
-            
-            # Pull latest images
-            docker pull $DOCKER_HUB_USERNAME/auto-ops-ai-backend:latest
-            docker pull $DOCKER_HUB_USERNAME/auto-ops-ai-frontend:latest
-            
-            # Stop and remove old containers
-            docker-compose -f docker-compose.deploy.yml down || true
-            
-            # Start new containers
-            docker-compose -f docker-compose.deploy.yml up -d
-            
-            # Open firewall ports
-            ufw allow 8000/tcp || true
-            ufw allow 80/tcp || true
-            
-            # Wait for services to stabilize
-            echo "⏳ Waiting for services to stabilize..."
-            sleep 20
-            
-            # Initialize database and seed data
-            echo "📦 Initializing database..."
-            docker-compose -f docker-compose.deploy.yml exec -T backend python backend/init_db.py || true
-            
-            echo "🌱 Loading seed data..."
-            docker-compose -f docker-compose.deploy.yml exec -T backend python backend/ingestion_script.py || true
-            
-            # Check health
-            sleep 10
-            docker-compose -f docker-compose.deploy.yml ps
-            docker-compose -f docker-compose.deploy.yml logs --tail=50
-            
-            # Cleanup
-            docker logout
