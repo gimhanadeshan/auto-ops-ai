@@ -30,8 +30,8 @@ frontend/package-lock.json
 logs/
 *.log
 
-# Data
-data/
+# Data (root only)
+/data/
 
 # OS
 Thumbs.db
@@ -81,12 +81,12 @@ backend/.env
 *.db
 *.sqlite
 *.sqlite3
-data/processed/*.db
-data/processed/*.sqlite
+/data/processed/*.db
+/data/processed/*.sqlite
 
-# Data
-data/processed/*
-!data/processed/.gitkeep
+# Data (root only)
+/data/processed/*
+!/data/processed/.gitkeep
 
 # Logs
 *.log
@@ -98,7 +98,7 @@ logs/
 
 # ChromaDB
 chroma_db/
-data/processed/chroma_db/
+/data/processed/chroma_db/
 
 # Pytest
 .pytest_cache/
