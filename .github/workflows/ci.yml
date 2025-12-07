@@ -125,7 +125,7 @@ jobs:
           key: ${{ secrets.DIGITALOCEAN_SSH_KEY }}
           port: 22
           passphrase: ${{ secrets.DIGITALOCEAN_SSH_PASSPHRASE }}
-          envs: DOCKER_HUB_USERNAME,DOCKER_HUB_PASSWORD,GITHUB_TOKEN,GOOGLE_API_KEY
+          envs: DOCKER_HUB_USERNAME,DOCKER_HUB_PASSWORD,GH_DEPLOY_TOKEN,GOOGLE_API_KEY
           timeout: 30m
           command_timeout: 10m
           script: |
@@ -149,7 +149,7 @@ jobs:
             
             # Pull latest code using GitHub token
             git config credential.helper store
-            echo "https://x-access-token:${GITHUB_TOKEN}@github.com" > ~/.git-credentials
+            echo "https://x-access-token:${GH_DEPLOY_TOKEN}@github.com" > ~/.git-credentials
             git fetch origin main
             git checkout -f origin/main
             rm -f ~/.git-credentials
