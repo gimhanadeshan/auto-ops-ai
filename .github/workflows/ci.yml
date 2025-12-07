@@ -1,10 +1,15 @@
-name: CI
+name: CI/CD
 
 on:
   push:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
+
+env:
+  REGISTRY: docker.io
+  IMAGE_NAME_BACKEND: ${{ secrets.DOCKER_HUB_USERNAME }}/auto-ops-ai-backend
+  IMAGE_NAME_FRONTEND: ${{ secrets.DOCKER_HUB_USERNAME }}/auto-ops-ai-frontend
 
 jobs:
   backend-tests:
@@ -41,3 +46,103 @@ jobs:
         working-directory: ./frontend
         run: |
           npm run build
+
+  build-and-push:
+    name: Build and Push Docker Images
+    runs-on: ubuntu-latest
+    needs: [backend-tests, frontend-build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_PASSWORD }}
+      
+      - name: Extract metadata (backend)
+        id: meta-backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME_BACKEND }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest
+      
+      - name: Extract metadata (frontend)
+        id: meta-frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME_FRONTEND }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest
+      
+      - name: Build and push backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          labels: ${{ steps.meta-backend.outputs.labels }}
+      
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/dockerfile
+          push: true
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          labels: ${{ steps.meta-frontend.outputs.labels }}
+
+  deploy-digital-ocean:
+    name: Deploy to Digital Ocean
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Deploy to Digital Ocean via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
+          DOCKER_HUB_PASSWORD: ${{ secrets.DOCKER_HUB_PASSWORD }}
+        with:
+          host: ${{ secrets.DIGITALOCEAN_HOST }}
+          username: ${{ secrets.DIGITALOCEAN_USER }}
+          key: ${{ secrets.DIGITALOCEAN_SSH_KEY }}
+          envs: DOCKER_HUB_USERNAME,DOCKER_HUB_PASSWORD
+          script: |
+            cd /app
+            git pull origin main
+            
+            # Login to Docker
+            echo "$DOCKER_HUB_PASSWORD" | docker login -u "$DOCKER_HUB_USERNAME" --password-stdin
+            
+            # Pull latest images
+            docker pull ${{ secrets.DOCKER_HUB_USERNAME }}/auto-ops-ai-backend:latest
+            docker pull ${{ secrets.DOCKER_HUB_USERNAME }}/auto-ops-ai-frontend:latest
+            
+            # Stop and remove old containers
+            docker-compose -f docker-compose.prod.yml down || true
+            
+            # Start new containers
+            docker-compose -f docker-compose.prod.yml up -d
+            
+            # Check health
+            sleep 10
+            docker-compose -f docker-compose.prod.yml ps
+            
+            # Cleanup
+            docker logout
