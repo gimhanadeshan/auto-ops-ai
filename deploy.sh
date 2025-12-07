@@ -116,11 +116,27 @@ VITE_API_BASE_URL=http://${DROPLET_IP}:8000/api/v1
 EOF
 echo "✅ Frontend .env created"
 
-# Step 5: Login to Docker Hub
+# Step 5: Login to Docker Hub (with retry)
 echo ""
 echo "5️⃣  Logging in to Docker Hub..."
-echo "$DOCKER_HUB_PASSWORD" | docker login -u "$DOCKER_HUB_USERNAME" --password-stdin
-echo "✅ Docker Hub login successful"
+MAX_RETRIES=3
+RETRY_COUNT=0
+
+while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+    if echo "$DOCKER_HUB_PASSWORD" | docker login -u "$DOCKER_HUB_USERNAME" --password-stdin 2>/dev/null; then
+        echo "✅ Docker Hub login successful"
+        break
+    else
+        RETRY_COUNT=$((RETRY_COUNT + 1))
+        if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+            echo "⚠️  Docker Hub login failed (attempt $RETRY_COUNT/$MAX_RETRIES), retrying in 5 seconds..."
+            sleep 5
+        else
+            echo "⚠️  Docker Hub login failed after $MAX_RETRIES attempts - will build from source"
+            REBUILD_NEEDED=true
+        fi
+    fi
+done
 
 # Step 6: Pull latest images or build if changes detected
 echo ""
@@ -128,13 +144,50 @@ echo "6️⃣  Processing Docker images..."
 
 if [ "$REBUILD_NEEDED" = true ]; then
     echo "🔨 Building new images from source..."
-    docker-compose -f docker-compose.deploy.yml build --no-cache
-    echo "✅ Images built successfully"
+    if docker-compose -f docker-compose.deploy.yml build --no-cache 2>/dev/null; then
+        echo "✅ Images built successfully"
+    else
+        echo "❌ Build failed - checking if images exist locally..."
+        BACKEND_IMAGE=$(docker images | grep auto-ops-ai-backend | head -1 | awk '{print $3}')
+        FRONTEND_IMAGE=$(docker images | grep auto-ops-ai-frontend | head -1 | awk '{print $3}')
+        if [ -n "$BACKEND_IMAGE" ] && [ -n "$FRONTEND_IMAGE" ]; then
+            echo "✅ Using existing local images"
+        else
+            echo "❌ No images available - deployment cannot continue"
+            exit 1
+        fi
+    fi
 else
-    echo "📦 Pulling latest pre-built images..."
-    docker pull $DOCKER_HUB_USERNAME/auto-ops-ai-backend:latest || echo "⚠️  Backend image not found - will build from source"
-    docker pull $DOCKER_HUB_USERNAME/auto-ops-ai-frontend:latest || echo "⚠️  Frontend image not found - will build from source"
-    echo "✅ Images processed"
+    echo "📦 Checking for pre-built images..."
+    
+    # Try to pull with retry logic
+    PULL_RETRY=0
+    while [ $PULL_RETRY -lt 2 ]; do
+        if docker pull $DOCKER_HUB_USERNAME/auto-ops-ai-backend:latest 2>/dev/null && \
+           docker pull $DOCKER_HUB_USERNAME/auto-ops-ai-frontend:latest 2>/dev/null; then
+            echo "✅ Images pulled successfully"
+            break
+        else
+            PULL_RETRY=$((PULL_RETRY + 1))
+            if [ $PULL_RETRY -lt 2 ]; then
+                echo "⚠️  Pull failed (attempt $PULL_RETRY/2) - checking for local images..."
+            else
+                echo "⚠️  Cannot pull from Docker Hub - using local images if available"
+            fi
+        fi
+    done
+    
+    # Check if local images exist
+    BACKEND_IMAGE=$(docker images | grep auto-ops-ai-backend | head -1 | awk '{print $3}')
+    if [ -z "$BACKEND_IMAGE" ]; then
+        echo "⚠️  Local images not found - will build from source"
+        if docker-compose -f docker-compose.deploy.yml build --no-cache 2>/dev/null; then
+            echo "✅ Images built successfully"
+        else
+            echo "❌ Build failed and no images available"
+            exit 1
+        fi
+    fi
 fi
 
 # Step 7: Stop old containers
