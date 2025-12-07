@@ -120,7 +120,7 @@ GEMINI_TEMPERATURE=0.9
 EMBEDDING_MODEL=models/embedding-001
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-4
-DATABASE_URL=sqlite:///./data/auto_ops.db
+DATABASE_URL=sqlite:///./data/processed/auto_ops.db
 SECRET_KEY=auto-ops-ai-secret-key-change-in-production
 ENVIRONMENT=production
 EOF
@@ -236,7 +236,7 @@ sleep 20
 # Step 11: Initialize database (skip if already exists)
 echo ""
 echo "1️⃣1️⃣ Checking database status..."
-DB_PATH="/app/data/auto_ops.db"
+DB_PATH="/app/data/processed/auto_ops.db"
 
 # Check if database exists inside the container
 DB_EXISTS=$(docker-compose -f docker-compose.deploy.yml exec -T backend sh -c "[ -f $DB_PATH ] && echo '1' || echo '0'" 2>/dev/null || echo "0")
