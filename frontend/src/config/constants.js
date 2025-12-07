@@ -1,21 +1,6 @@
 // API Configuration
-// Use relative URL for backend API - works for both IP and domain access
-const getAPIBaseURL = () => {
-  // If VITE_API_BASE_URL is set via environment, use it
-  if (import.meta.env.VITE_API_BASE_URL) {
-    let url = import.meta.env.VITE_API_BASE_URL;
-    // Remove trailing /api/v1 if present - we'll add it in endpoints
-    return url.replace(/\/api\/v1\/?$/, '');
-  }
-  
-  // Otherwise, use current hostname with :8000
-  const protocol = window.location.protocol;
-  const hostname = window.location.hostname;
-  return `${protocol}//${hostname}:8000`;
-};
-
 export const API_CONFIG = {
-  BASE_URL: getAPIBaseURL(),
+  BASE_URL: 'http://138.68.228.105:8000'||'http://www.prompto.gimhana.live:8000',
   TIMEOUT: 10000,
   RETRY_ATTEMPTS: 3
 }
