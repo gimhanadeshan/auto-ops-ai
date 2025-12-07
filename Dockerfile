@@ -35,9 +35,6 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 # Copy application code
 COPY --chown=appuser:appuser backend/app /app/app
 
-# Copy raw data (optional)
-COPY --chown=appuser:appuser data/raw /app/data/raw
-
 # Switch to non-root user
 USER appuser
 
