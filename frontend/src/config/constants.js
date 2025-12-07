@@ -1,6 +1,6 @@
 // API Configuration
 export const API_CONFIG = {
-  BASE_URL: 'http://138.68.228.105:8000'||'http://www.prompto.gimhana.live:8000',
+  BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://138.68.228.105:8000/api/v1',
   TIMEOUT: 10000,
   RETRY_ATTEMPTS: 3
 }
@@ -9,56 +9,56 @@ export const API_CONFIG = {
 export const API_ENDPOINTS = {
   // Auth endpoints
   AUTH: {
-    LOGIN: '/api/v1/login',
-    REGISTER: '/api/v1/register',
-    LOGOUT: '/api/v1/logout',
-    REFRESH: '/api/v1/refresh'
+    LOGIN: '/login',
+    REGISTER: '/register',
+    LOGOUT: '/logout',
+    REFRESH: '/refresh'
   },
   
   // Chat endpoints
   CHAT: {
-    SEND_MESSAGE: '/api/chat',
-    GET_HISTORY: '/api/chat/history'
+    SEND_MESSAGE: '/chat',
+    GET_HISTORY: '/chat/history'
   },
   
   // Ticket endpoints
   TICKETS: {
-    GET_ALL: '/api/v1/tickets',
-    GET_BY_ID: (id) => `/api/v1/tickets/${id}`,
-    CREATE: '/api/v1/tickets',
-    UPDATE: (id) => `/api/v1/tickets/${id}`,
-    DELETE: (id) => `/api/v1/tickets/${id}`
+    GET_ALL: '/tickets',
+    GET_BY_ID: (id) => `/tickets/${id}`,
+    CREATE: '/tickets',
+    UPDATE: (id) => `/tickets/${id}`,
+    DELETE: (id) => `/tickets/${id}`
   },
   
   // Dashboard endpoints
   DASHBOARD: {
-    STATS: '/api/dashboard/stats',
-    RECENT_ISSUES: '/api/dashboard/recent-issues'
+    STATS: '/dashboard/stats',
+    RECENT_ISSUES: '/dashboard/recent-issues'
   },
   
   // Monitoring endpoints
   MONITORING: {
-    SYSTEM_METRICS: '/api/v1/monitoring/metrics',
-    SERVICES: '/api/v1/monitoring/services',
-    LOGS: '/api/v1/monitoring/logs',
-    CHECK_HEALTH: '/api/v1/monitoring/check-systems',
-    STATS: '/api/v1/monitoring/stats'
+    SYSTEM_METRICS: '/monitoring/metrics',
+    SERVICES: '/monitoring/services',
+    LOGS: '/monitoring/logs',
+    CHECK_HEALTH: '/monitoring/check-systems',
+    STATS: '/monitoring/stats'
   },
   
   // Reports endpoints
   REPORTS: {
-    GENERATE: '/api/reports',
-    EXPORT: '/api/reports/export'
+    GENERATE: '/reports',
+    EXPORT: '/reports/export'
   },
   
   // Status endpoint
-  STATUS: '/api/status',
+  STATUS: '/status',
   
   // Static data endpoints
   STATIC_DATA: {
-    QUICK_ACTIONS: '/api/v1/quick-actions',
-    ERROR_CODES: '/api/v1/error-codes',
-    ERROR_CODES_BY_PLATFORM: (platform) => `/api/v1/error-codes/${platform}`
+    QUICK_ACTIONS: '/quick-actions',
+    ERROR_CODES: '/error-codes',
+    ERROR_CODES_BY_PLATFORM: (platform) => `/error-codes/${platform}`
   }
 }
 
