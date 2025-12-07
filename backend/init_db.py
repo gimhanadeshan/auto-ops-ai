@@ -10,6 +10,8 @@ import os
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from migrations import init_migrations_table, migration_applied, record_migration
+
 # DON'T import models here - we need to check database first
 # from sqlalchemy.orm import Session
 # from app.core.database import engine, SessionLocal, Base
@@ -80,8 +82,12 @@ def init_database():
     if not db_already_exists:
         Base.metadata.create_all(bind=engine)
         print("[OK] Database tables created successfully")
+        # Initialize migrations table
+        init_migrations_table(db_path)
     else:
         print("[OK] Database already exists, skipping table creation")
+        # Initialize migrations table (safe even if exists)
+        init_migrations_table(db_path)
     
     return SessionLocal, UserDB, Role, get_password_hash
 
@@ -90,14 +96,24 @@ def seed_initial_users(db, UserDB, Role, get_password_hash):
     """Seed initial users with different roles."""
     print("\nSeeding initial users...")
     
-    # Check if users already exist
+    # Check if this migration has already been applied
+    migration_name = "seed_initial_users_001"
+    if migration_applied(migration_name):
+        print(f"[i] Migration '{migration_name}' already applied. Skipping seed.")
+        return
+    
+    # Check if admin user exists
     try:
-        existing_users = db.query(UserDB).count()
-        if existing_users > 0:
-            print(f"[i] Database already has {existing_users} users. Skipping seed.")
+        existing_admin = db.query(UserDB).filter(
+            UserDB.email == "admin@acme.com"
+        ).first()
+        
+        if existing_admin:
+            print("[i] Admin user already exists. Recording migration.")
+            record_migration(migration_name)
             return
     except Exception as e:
-        print(f"[i] Existing users table detected, checking schema...")
+        print(f"[i] Checking existing users...")
         db.rollback()
     
     users = [
@@ -117,6 +133,9 @@ def seed_initial_users(db, UserDB, Role, get_password_hash):
     
     db.commit()
     print(f"[OK] Seeded {len(users)} users successfully")
+    
+    # Record that this migration has been applied
+    record_migration(migration_name)
     
     # Print credentials
     print("\n[*] Initial User Credentials:")

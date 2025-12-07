@@ -101,5 +101,8 @@ jobs:
             cd /app || mkdir -p /app && cd /app
             git clone https://github.com/gimhanadeshan/auto-ops-ai.git . 2>/dev/null || git fetch origin main && git checkout -f origin/main
             chmod +x deploy.sh
-            DOCKER_HUB_USERNAME=$DOCKER_HUB_USERNAME DOCKER_HUB_PASSWORD=$DOCKER_HUB_PASSWORD GOOGLE_API_KEY=$GOOGLE_API_KEY ./deploy.sh
+            export DOCKER_HUB_USERNAME="$DOCKER_HUB_USERNAME"
+            export DOCKER_HUB_PASSWORD="$DOCKER_HUB_PASSWORD"
+            export GOOGLE_API_KEY="$GOOGLE_API_KEY"
+            ./deploy.sh
 
