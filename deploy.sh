@@ -57,7 +57,7 @@ echo "3️⃣  Cloning repository..."
 REBUILD_NEEDED=false
 DOCKERFILE_CHANGED=false
 GIT_RETRY=0
-GIT_MAX_RETRIES=3
+GIT_MAX_RETRIES=2
 
 while [ $GIT_RETRY -lt $GIT_MAX_RETRIES ]; do
     if [ ! -d .git ]; then
@@ -94,8 +94,8 @@ while [ $GIT_RETRY -lt $GIT_MAX_RETRIES ]; do
     
     GIT_RETRY=$((GIT_RETRY + 1))
     if [ $GIT_RETRY -lt $GIT_MAX_RETRIES ]; then
-        echo "⚠️  Git operation failed (attempt $GIT_RETRY/$GIT_MAX_RETRIES) - retrying in 10 seconds..."
-        sleep 10
+        echo "⚠️  Git operation failed (attempt $GIT_RETRY/$GIT_MAX_RETRIES) - retrying in 5 seconds..."
+        sleep 5
     else
         echo "❌ Git operation failed after $GIT_MAX_RETRIES attempts"
         exit 1
@@ -137,7 +137,7 @@ echo "✅ Frontend .env created"
 # Step 5: Login to Docker Hub (with retry)
 echo ""
 echo "5️⃣  Logging in to Docker Hub..."
-MAX_RETRIES=3
+MAX_RETRIES=2
 RETRY_COUNT=0
 
 while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
@@ -147,10 +147,10 @@ while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
     else
         RETRY_COUNT=$((RETRY_COUNT + 1))
         if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
-            echo "⚠️  Docker Hub login failed (attempt $RETRY_COUNT/$MAX_RETRIES), retrying in 5 seconds..."
-            sleep 5
+            echo "⚠️  Docker Hub login failed (attempt $RETRY_COUNT/$MAX_RETRIES), retrying in 3 seconds..."
+            sleep 3
         else
-            echo "⚠️  Docker Hub login failed after $MAX_RETRIES attempts - will build from source"
+            echo "⚠️  Docker Hub login failed - will build from source"
             REBUILD_NEEDED=true
         fi
     fi
@@ -228,10 +228,26 @@ ufw allow 80/tcp || true
 ufw allow 443/tcp || true
 echo "✅ Firewall configured"
 
-# Step 10: Wait for services
+# Step 10: Wait for services with health check
 echo ""
-echo "🔟 Waiting for services to stabilize..."
-sleep 20
+echo "🔟 Waiting for backend to be ready..."
+HEALTH_WAIT=0
+MAX_WAIT=30
+while [ $HEALTH_WAIT -lt $MAX_WAIT ]; do
+    if curl -s http://localhost:8000/health > /dev/null 2>&1; then
+        echo "✅ Backend is ready!"
+        break
+    fi
+    HEALTH_WAIT=$((HEALTH_WAIT + 5))
+    if [ $HEALTH_WAIT -lt $MAX_WAIT ]; then
+        echo "  ⏳ Waiting... ($HEALTH_WAIT/$MAX_WAIT seconds)"
+        sleep 5
+    fi
+done
+
+if [ $HEALTH_WAIT -ge $MAX_WAIT ]; then
+    echo "⚠️  Backend didn't respond to health check (normal for first deployment)"
+fi
 
 # Step 11: Initialize database (skip if already exists)
 echo ""
