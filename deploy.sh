@@ -391,15 +391,24 @@ echo ""
 echo "1️⃣5️⃣ Container status:"
 docker-compose -f docker-compose.deploy.yml ps
 
-# Step 16: Run configuration check
+# Step 16: Verify bot is online by checking status endpoint
 echo ""
-echo "1️⃣6️⃣ Verifying critical configuration..."
-if docker-compose -f docker-compose.deploy.yml exec -T backend python check_config.py 2>/dev/null; then
+echo "1️⃣6️⃣ Verifying bot status..."
+BOT_STATUS=$(curl -s http://localhost:8000/api/v1/status 2>/dev/null | grep -o '"status":"[^"]*"' | cut -d'"' -f4)
+BOT_BOT_STATUS=$(curl -s http://localhost:8000/api/v1/status 2>/dev/null | grep -o '"status":"[^"]*"' | tail -1 | cut -d'"' -f4)
+
+if [ "$BOT_BOT_STATUS" = "online" ]; then
+    echo "✅ Bot is ONLINE and ready to chat!"
     CONFIG_OK="true"
-    echo ""
 else
+    echo "⚠️  Bot status: $BOT_BOT_STATUS (check GOOGLE_API_KEY if offline)"
+    # Check if API key is in the .env
+    if grep -q "^GOOGLE_API_KEY=AIza" backend/.env 2>/dev/null; then
+        echo "   API Key appears to be set in .env"
+    else
+        echo "   ❌ API Key may not be properly configured"
+    fi
     CONFIG_OK="false"
-    echo "⚠️  Configuration check failed"
 fi
 
 # Cleanup
