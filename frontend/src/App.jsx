@@ -54,7 +54,7 @@ function ChatPage({ user }) {
   
   // Agent Mode state
   const [agentMode, setAgentMode] = useState(false)
-  const [showAgentModeTip, setShowAgentModeTip] = useState(false)
+  const [agentModeTipShown, setAgentModeTipShown] = useState(false)  // Track if tip was shown
   
   const messagesEndRef = useRef(null)
   const interimTranscriptRef = useRef('')
@@ -293,14 +293,17 @@ function ChatPage({ user }) {
         suggestedActions: response.suggested_actions,  // First action only (step-by-step)
         troubleshootingStep: response.metadata?.troubleshooting_step,
         totalSteps: response.metadata?.total_steps,
-        agentModeSuggestion: response.agent_mode_suggestion  // Tip to enable agent mode
+        // Only show agent mode tip if not shown before and not in agent mode
+        agentModeSuggestion: (response.agent_mode_suggestion && !agentMode && !agentModeTipShown) 
+          ? response.agent_mode_suggestion 
+          : null
       }
 
       setMessages(prev => [...prev, assistantMessage])
       
-      // Show agent mode tip if backend suggests it
-      if (response.agent_mode_suggestion && !agentMode) {
-        setShowAgentModeTip(true)
+      // Mark tip as shown if backend suggests it (only once per session)
+      if (response.agent_mode_suggestion && !agentMode && !agentModeTipShown) {
+        setAgentModeTipShown(true)
       }
       
       // Track remaining actions for step-by-step troubleshooting
@@ -370,8 +373,9 @@ ${typeof output === 'string' ? output : JSON.stringify(output, null, 2)}`
     // Track this action as executed
     setExecutedActionIds(prev => new Set([...prev, action.id]))
     
-    // For low-risk actions, execute directly
-    if (action.risk_level === 'low') {
+    // AGENT MODE: Always show permission modal for transparency and user control
+    // Even low-risk actions should be confirmed when in Agent Mode
+    if (false) {  // Disabled auto-execution - always show modal in Agent Mode
       try {
         setActionExecuting(true)
         setLoading(true)  // Show typing indicator
@@ -673,6 +677,7 @@ ${typeof output === 'string' ? output : JSON.stringify(output, null, 2)}`
     setCurrentSessionId(null)  // Reset session ID for new chat
     setExecutedActionIds(new Set())  // Reset executed actions tracker
     setAwaitingFeedback(false)  // Reset feedback state
+    setAgentModeTipShown(false)  // Reset agent mode tip for new chat
     clearSelectedImage()
     
     // Clear localStorage for fresh start
@@ -849,7 +854,7 @@ ${typeof output === 'string' ? output : JSON.stringify(output, null, 2)}`
           </div>
         </div>
         <div className="chat-header-right">
-          <div className="agent-mode-toggle" title={agentMode ? "Agent Mode: Actions enabled" : "Agent Mode: Advice only"}>
+          <div className="agent-mode-toggle" title={agentMode ? "Agent Mode: Actions enabled with permission required" : "Agent Mode: Advice only"}>
             <span className="agent-mode-label">Agent Mode</span>
             <label className="toggle-switch">
               <input 
@@ -859,7 +864,11 @@ ${typeof output === 'string' ? output : JSON.stringify(output, null, 2)}`
               />
               <span className="toggle-slider"></span>
             </label>
-            {agentMode && <span className="agent-mode-indicator">🤖</span>}
+            {agentMode && (
+              <span className="agent-mode-indicator" title="All actions require your approval">
+                🤖🔒
+              </span>
+            )}
           </div>
           <button
             onClick={handleNewChat}

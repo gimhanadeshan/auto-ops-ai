@@ -3,7 +3,7 @@ User models for database and API.
 """
 from datetime import datetime
 from typing import Optional, List
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, JSON
 from sqlalchemy.sql import func
 from pydantic import BaseModel, EmailStr
 from app.core.database import Base
@@ -23,6 +23,8 @@ class UserDB(Base):
     tier = Column(String, default="staff")  # Deprecated: kept for backward compatibility
     department = Column(String, nullable=True)  # For team-based access control
     manager_id = Column(Integer, nullable=True)  # ID of user's manager for team hierarchy
+    specialization = Column(JSON, nullable=True)  # Agent expertise: ["hardware", "network", "software"]
+    current_workload = Column(Integer, default=0)  # Number of active assigned tickets
     is_active = Column(Boolean, default=False)  # Inactive by default - admin must activate
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -51,6 +53,8 @@ class UserResponse(BaseModel):
     role: str
     department: Optional[str] = None
     manager_id: Optional[int] = None
+    specialization: Optional[List[str]] = None  # Agent expertise areas
+    current_workload: Optional[int] = 0  # Active tickets assigned
     is_active: bool
     created_at: datetime
     permissions: Optional[List[str]] = None  # Computed field
@@ -71,6 +75,8 @@ class UserResponse(BaseModel):
             role=user_db.role,
             department=user_db.department,
             manager_id=user_db.manager_id,
+            specialization=user_db.specialization,
+            current_workload=user_db.current_workload or 0,
             is_active=user_db.is_active,
             created_at=user_db.created_at,
             permissions=permissions
@@ -97,6 +103,7 @@ class UserCreate(BaseModel):
     password: str
     role: Role = Role.STAFF
     department: Optional[str] = None
+    specialization: Optional[List[str]] = None  # Agent expertise areas
 
 
 class UserUpdate(BaseModel):
@@ -106,3 +113,4 @@ class UserUpdate(BaseModel):
     password: Optional[str] = None
     role: Role = Role.STAFF
     department: Optional[str] = None
+    specialization: Optional[List[str]] = None  # Agent expertise areas

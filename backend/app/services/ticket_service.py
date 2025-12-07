@@ -3,7 +3,7 @@ Ticket service - CRUD operations and business logic for tickets.
 """
 import logging
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from app.models.ticket import (
@@ -11,6 +11,8 @@ from app.models.ticket import (
     TicketPriority, TicketCategory
 )
 from app.models.user import UserDB
+from app.services.assignment_service import get_assignment_service
+
 logger = logging.getLogger(__name__)
 
 
@@ -18,9 +20,19 @@ class TicketService:
     """Service for managing support tickets."""
     
     @staticmethod
-    def create_ticket(db: Session, ticket_data: TicketCreate) -> TicketDB:
+    def create_ticket(db: Session, ticket_data: TicketCreate) -> Dict:
         """
-        Create a new ticket with AI analysis.
+        Create a new ticket with AI analysis and smart assignment.
+        
+        Returns:
+            {
+                "ticket": TicketDB,
+                "assignment": {
+                    "assigned_to": "agent@example.com",
+                    "reason": "Assignment reason",
+                    "confidence": 0.85
+                }
+            }
         """
         # Create ticket in database
         db_ticket = TicketDB(
@@ -29,7 +41,8 @@ class TicketService:
             user_email=ticket_data.user_email,
             status=TicketStatus.OPEN,
             priority=ticket_data.priority or TicketPriority.MEDIUM,
-            category=ticket_data.category or TicketCategory.OTHER
+            category=ticket_data.category or TicketCategory.OTHER,
+            assigned_to=ticket_data.assigned_to  # Manual assignment if provided
         )
         
         # Simple ticket creation - AI analysis happens in chat endpoint
@@ -45,7 +58,35 @@ class TicketService:
         db.commit()
         db.refresh(db_ticket)
         
-        return db_ticket
+        # 🆕 Smart Assignment (if not manually assigned)
+        assignment_result = None
+        if not db_ticket.assigned_to:
+            try:
+                assignment_service = get_assignment_service()
+                assignment_result = assignment_service.assign_ticket(db_ticket, db)
+                
+                if assignment_result and assignment_result.get('assigned_to'):
+                    db_ticket.status = TicketStatus.ASSIGNED_TO_HUMAN
+                    db.commit()
+                    db.refresh(db_ticket)
+                    
+                    logger.info(
+                        f"[TICKET] #{db_ticket.id} auto-assigned to "
+                        f"{assignment_result['assigned_to']} - "
+                        f"{assignment_result.get('reason', 'N/A')}"
+                    )
+            except Exception as e:
+                logger.error(f"[TICKET] Auto-assignment failed: {e}")
+                assignment_result = {
+                    "assigned_to": None,
+                    "reason": f"Assignment failed: {str(e)}",
+                    "confidence": 0.0
+                }
+        
+        return {
+            "ticket": db_ticket,
+            "assignment": assignment_result
+        }
     
     @staticmethod
     def get_ticket(db: Session, ticket_id: int) -> Optional[TicketDB]:

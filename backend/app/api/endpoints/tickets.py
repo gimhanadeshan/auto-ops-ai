@@ -35,8 +35,15 @@ async def create_ticket(
         if not ticket.user_email:
             ticket.user_email = current_user.email
         
-        # Create the ticket
-        new_ticket = ticket_service.create_ticket(db, ticket)
+        # Create the ticket (returns dict with ticket and assignment)
+        result = ticket_service.create_ticket(db, ticket)
+        new_ticket = result.get("ticket")
+        assignment = result.get("assignment")
+        
+        # Build audit log details
+        details = f"Created ticket: {new_ticket.title}"
+        if assignment and assignment.get('assigned_to'):
+            details += f" | Auto-assigned to {assignment['assigned_to']} - {assignment.get('reason', 'N/A')}"
         
         # Log ticket creation
         audit_service.log_ticket_access(
@@ -45,7 +52,7 @@ async def create_ticket(
             user_role=current_user.role,
             ticket_id=str(new_ticket.id),
             action=AuditAction.TICKET_CREATE,
-            details=f"Created ticket: {new_ticket.title}"
+            details=details
         )
         
         return new_ticket
@@ -240,6 +247,65 @@ async def update_ticket(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error updating ticket: {str(e)}")
+
+
+@router.post("/tickets/{ticket_id}/reassign", response_model=Ticket)
+async def reassign_ticket(
+    ticket_id: int,
+    agent_email: Optional[str] = None,  # If None, use smart assignment
+    current_user: UserDB = Depends(require_permission(Permission.TICKET_ASSIGN)),
+    db: Session = Depends(get_db)
+):
+    """
+    Reassign a ticket to a different agent.
+    If agent_email is not provided, uses smart LLM-based assignment.
+    Requires TICKET_ASSIGN permission (Support L1+ or Manager).
+    """
+    from app.services.assignment_service import get_assignment_service
+    from app.models.ticket import TicketDB
+    
+    # Get ticket
+    ticket = db.query(TicketDB).filter(TicketDB.id == ticket_id).first()
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    
+    assignment_service = get_assignment_service()
+    old_assignee = ticket.assigned_to
+    
+    try:
+        if agent_email:
+            # Manual reassignment
+            result = assignment_service.reassign_ticket(ticket, agent_email, db)
+            if not result.get('success'):
+                raise HTTPException(status_code=400, detail=result.get('reason', 'Assignment failed'))
+            
+            details = f"Manually reassigned from {old_assignee or 'unassigned'} to {agent_email}"
+        else:
+            # Smart reassignment
+            result = assignment_service.assign_ticket(ticket, db)
+            details = f"Smart reassignment from {old_assignee or 'unassigned'} to {ticket.assigned_to} - {result.get('reason', 'N/A')}"
+        
+        # Update status
+        ticket.status = TicketStatus.ASSIGNED_TO_HUMAN
+        db.commit()
+        db.refresh(ticket)
+        
+        # Log reassignment
+        audit_service.log_ticket_access(
+            db=db,
+            user_email=current_user.email,
+            user_role=current_user.role,
+            ticket_id=str(ticket_id),
+            action=AuditAction.TICKET_UPDATE,
+            details=details
+        )
+        
+        return ticket
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Reassignment failed: {str(e)}")
 
 
 @router.delete("/tickets/{ticket_id}", status_code=204)

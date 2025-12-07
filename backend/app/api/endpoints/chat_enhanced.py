@@ -631,20 +631,36 @@ async def _handle_ticket_creation(
         }
         priority = priority_map.get(intent.urgency, TicketPriority.MEDIUM)
         
+        # Map LLM category to TicketCategory enum
+        from app.models.ticket import TicketCategory
+        category_map = {
+            'hardware': TicketCategory.HARDWARE,
+            'software': TicketCategory.SOFTWARE,
+            'network': TicketCategory.NETWORK,
+            'account': TicketCategory.ACCOUNT,
+            'other': TicketCategory.OTHER
+        }
+        category = category_map.get(intent.category.lower(), TicketCategory.OTHER)
+        
         # Create ticket
         ticket_data = TicketCreate(
             title=metadata['title'],
             description=metadata['description'],
             user_email=user_email,
-            priority=priority
+            priority=priority,
+            category=category  # 🆕 Pass category for smart assignment
         )
         
-        db_ticket = TicketService.create_ticket(db=db, ticket_data=ticket_data)
+        result = TicketService.create_ticket(db=db, ticket_data=ticket_data)
+        db_ticket = result.get("ticket")
+        assignment = result.get("assignment")
         
         chat_logger.info(f"TICKET CREATED: #{db_ticket.id}")
         chat_logger.info(f"  Title: {metadata['title']}")
-        chat_logger.info(f"  Category: {intent.category}")
+        chat_logger.info(f"  Category: {category.value}")
         chat_logger.info(f"  Priority: {priority.value}")
+        if assignment and assignment.get('assigned_to'):
+            chat_logger.info(f"  Assigned to: {assignment['assigned_to']} ({assignment.get('reason', 'N/A')})")
         
         return db_ticket.id
         
@@ -1235,21 +1251,37 @@ async def _handle_image_ticket_creation(
         
         priority = priority_map.get(intent.urgency, TicketPriority.MEDIUM)
         
+        # Map LLM category to TicketCategory enum
+        from app.models.ticket import TicketCategory
+        category_map = {
+            'hardware': TicketCategory.HARDWARE,
+            'software': TicketCategory.SOFTWARE,
+            'network': TicketCategory.NETWORK,
+            'account': TicketCategory.ACCOUNT,
+            'other': TicketCategory.OTHER
+        }
+        category = category_map.get(intent.category.lower(), TicketCategory.OTHER)
+        
         # Create ticket
         ticket_data = TicketCreate(
             title=metadata['title'][:100],
             description=enhanced_description,
             user_email=user_email,
-            priority=priority
+            priority=priority,
+            category=category  # 🆕 Pass category for smart assignment
         )
         
-        db_ticket = TicketService.create_ticket(db=db, ticket_data=ticket_data)
+        result = TicketService.create_ticket(db=db, ticket_data=ticket_data)
+        db_ticket = result.get("ticket")
+        assignment = result.get("assignment")
         
         chat_logger.info(f"TICKET CREATED: #{db_ticket.id}")
         chat_logger.info(f"  Title: {metadata['title']}")
-        chat_logger.info(f"  Category: {intent.category}")
+        chat_logger.info(f"  Category: {category.value}")
         chat_logger.info(f"  Priority: {priority.value}")
         chat_logger.info(f"  Image: {image_filename}")
+        if assignment and assignment.get('assigned_to'):
+            chat_logger.info(f"  Assigned to: {assignment['assigned_to']} ({assignment.get('reason', 'N/A')})")
         
         return db_ticket.id
         
