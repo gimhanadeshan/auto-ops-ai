@@ -47,7 +47,6 @@
   padding: var(--space-lg);
   background: var(--color-bg-hover);
   border: 1px solid var(--color-border-primary);
-  border-radius: 8px;
   margin-bottom: var(--space-lg);
 }
 
@@ -74,7 +73,6 @@
   color: white;
   font-weight: var(--font-weight-semibold);
   font-size: var(--font-size-sm);
-  border-radius: 6px;
   box-shadow: var(--shadow-sm);
 }
 
@@ -95,3 +93,4 @@
     font-size: var(--font-size-base);
   }
 }
+

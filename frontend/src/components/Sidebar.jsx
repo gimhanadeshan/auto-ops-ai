@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom'
+import { useMemo } from 'react'
 import { 
   LayoutDashboard, 
   MessageSquare, 
@@ -12,22 +13,109 @@ import {
   Shield,
   Bell,
   Database,
-  Zap
+  Zap,
+  AlertCircle,
+  Rocket,
+  Users,
+  FileCheck
 } from 'lucide-react'
 import ThemeToggle from './ThemeToggle'
+import { usePermissions } from '../hooks/usePermissions'
+import { PERMISSIONS } from '../utils/permissionUtils'
 import '../styles/components/Sidebar.css'
 
 function Sidebar({ user, onLogout }) {
-  const navItems = [
-    { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { path: '/chat', icon: MessageSquare, label: 'AI Support Chat' },
-    { path: '/tickets', icon: FileText, label: 'Tickets' },
-    { path: '/monitoring', icon: Activity, label: 'System Monitoring' },
-    { path: '/reports', icon: BarChart3, label: 'Reports & Analytics' },
-    { path: '/automation', icon: Zap, label: 'Automation Rules' },
-    { path: '/knowledge-base', icon: Database, label: 'Knowledge Base' },
-    { path: '/settings', icon: Settings, label: 'Settings' }
-  ]
+  const { hasPermission, hasAnyPermission, isAdmin, getRoleInfo } = usePermissions();
+
+  // Define navigation items with permission requirements
+  const allNavItems = [
+    { 
+      path: '/dashboard', 
+      icon: LayoutDashboard, 
+      label: 'Dashboard',
+      permissions: [PERMISSIONS.DASHBOARD_VIEW]
+    },
+    { 
+      path: '/quick-actions', 
+      icon: Rocket, 
+      label: 'Quick Actions',
+      permissions: [PERMISSIONS.TICKET_CREATE]
+    },
+    { 
+      path: '/chat', 
+      icon: MessageSquare, 
+      label: 'AI Support Chat',
+      permissions: [PERMISSIONS.TICKET_CREATE, PERMISSIONS.TROUBLESHOOT_RUN]
+    },
+    { 
+      path: '/tickets', 
+      icon: FileText, 
+      label: 'Tickets',
+      permissions: [PERMISSIONS.TICKET_VIEW_OWN, PERMISSIONS.TICKET_VIEW_TEAM, PERMISSIONS.TICKET_VIEW_ALL]
+    },
+    { 
+      path: '/monitoring', 
+      icon: Activity, 
+      label: 'System Monitoring',
+      permissions: [PERMISSIONS.SYSTEM_MONITOR]
+    },
+    { 
+      path: '/reports', 
+      icon: BarChart3, 
+      label: 'Reports & Analytics',
+      permissions: [PERMISSIONS.REPORTS_VIEW]
+    },
+    { 
+      path: '/automation', 
+      icon: Zap, 
+      label: 'Automation Rules',
+      permissions: [PERMISSIONS.SYSTEM_ADMIN],
+      adminOnly: true
+    },
+    { 
+      path: '/error-codes', 
+      icon: AlertCircle, 
+      label: 'Error Codes',
+      permissions: [PERMISSIONS.KB_VIEW]
+    },
+    { 
+      path: '/knowledge-base', 
+      icon: Database, 
+      label: 'Knowledge Base',
+      permissions: [PERMISSIONS.KB_VIEW]
+    },
+    { 
+      path: '/users', 
+      icon: Users, 
+      label: 'User Management',
+      permissions: [PERMISSIONS.USER_VIEW],
+      adminOnly: true
+    },
+    { 
+      path: '/audit-logs', 
+      icon: FileCheck, 
+      label: 'Audit Logs',
+      permissions: [PERMISSIONS.USER_VIEW, PERMISSIONS.SYSTEM_ADMIN],
+      adminOnly: true
+    },
+    { 
+      path: '/settings', 
+      icon: Settings, 
+      label: 'Settings',
+      permissions: [] // Available to all
+    }
+  ];
+
+  // Filter navigation items based on user permissions
+  const navItems = useMemo(() => {
+    return allNavItems.filter(item => {
+      // If no permissions required, show to everyone
+      if (!item.permissions || item.permissions.length === 0) return true;
+      
+      // Check if user has any of the required permissions
+      return hasAnyPermission(item.permissions);
+    });
+  }, [hasAnyPermission])
 
   return (
     <aside className="sidebar">
@@ -47,9 +135,9 @@ function Sidebar({ user, onLogout }) {
         </div>
         <div className="user-info">
           <span className="user-name">{user?.name || 'Guest'}</span>
-          <span className="user-tier">
+          <span className="user-tier" style={{ color: getRoleInfo().color }}>
             <Shield size={12} />
-            {user?.tier || 'Standard'}
+            {getRoleInfo().label}
           </span>
         </div>
       </div>
@@ -59,10 +147,12 @@ function Sidebar({ user, onLogout }) {
           <NavLink
             key={item.path}
             to={item.path}
-            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''} ${item.adminOnly ? 'admin-only' : ''}`}
+            title={item.adminOnly ? 'Admin Only' : item.label}
           >
             <item.icon size={20} />
             <span>{item.label}</span>
+            {item.adminOnly && <Shield size={14} className="admin-badge" />}
           </NavLink>
         ))}
       </nav>

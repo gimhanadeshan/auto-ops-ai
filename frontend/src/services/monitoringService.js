@@ -7,10 +7,17 @@ import { API_ENDPOINTS } from '../config/constants'
  */
 export const monitoringService = {
   /**
-   * Get system metrics
+   * Get current system metrics for real-time display
    */
   async getMetrics() {
     return httpClient.get(API_ENDPOINTS.MONITORING.SYSTEM_METRICS)
+  },
+
+  /**
+   * Get real system stats using psutil (Task Manager data)
+   */
+  async getRealStats() {
+    return httpClient.get(API_ENDPOINTS.MONITORING.STATS)
   },
 
   /**
@@ -26,5 +33,14 @@ export const monitoringService = {
    */
   async getLogs(params = {}) {
     return httpClient.get(API_ENDPOINTS.MONITORING.LOGS, params)
+  },
+
+  /**
+   * Check system health
+   */
+  async checkSystemHealth(autoCreateTickets = true) {
+    return httpClient.post(API_ENDPOINTS.MONITORING.CHECK_HEALTH, { 
+      auto_create_tickets: autoCreateTickets 
+    })
   }
 }

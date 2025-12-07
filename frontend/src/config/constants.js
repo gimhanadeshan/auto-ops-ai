@@ -38,9 +38,11 @@ export const API_ENDPOINTS = {
   
   // Monitoring endpoints
   MONITORING: {
-    SYSTEM_METRICS: '/api/monitoring/metrics',
-    SERVICES: '/api/monitoring/services',
-    LOGS: '/api/monitoring/logs'
+    SYSTEM_METRICS: '/api/v1/monitoring/metrics',
+    SERVICES: '/api/v1/monitoring/services',
+    LOGS: '/api/v1/monitoring/logs',
+    CHECK_HEALTH: '/api/v1/monitoring/check-systems',
+    STATS: '/api/v1/monitoring/stats'
   },
   
   // Reports endpoints
@@ -50,7 +52,14 @@ export const API_ENDPOINTS = {
   },
   
   // Status endpoint
-  STATUS: '/api/status'
+  STATUS: '/api/status',
+  
+  // Static data endpoints
+  STATIC_DATA: {
+    QUICK_ACTIONS: '/api/v1/quick-actions',
+    ERROR_CODES: '/api/v1/error-codes',
+    ERROR_CODES_BY_PLATFORM: (platform) => `/api/v1/error-codes/${platform}`
+  }
 }
 
 // Route Paths
@@ -58,12 +67,16 @@ export const ROUTES = {
   LOGIN: '/login',
   REGISTER: '/register',
   DASHBOARD: '/dashboard',
+  QUICK_ACTIONS: '/quick-actions',
   CHAT: '/chat',
   TICKETS: '/tickets',
   MONITORING: '/monitoring',
   REPORTS: '/reports',
   AUTOMATION: '/automation',
+  ERROR_CODES: '/error-codes',
   KNOWLEDGE_BASE: '/knowledge-base',
+  USER_MANAGEMENT: '/users',
+  AUDIT_LOGS: '/audit-logs',
   SETTINGS: '/settings',
   ROOT: '/'
 }

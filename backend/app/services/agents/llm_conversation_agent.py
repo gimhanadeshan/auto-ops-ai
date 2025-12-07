@@ -24,17 +24,20 @@ class LLMConversationAgent:
             raise ValueError("GOOGLE_API_KEY not configured")
         
         genai.configure(api_key=settings.google_api_key)
+        # Use the model from settings directly
         self.model = genai.GenerativeModel(
             settings.gemini_model,
             generation_config=genai.types.GenerationConfig(
-                temperature=0.8,  # Creative but consistent
-                max_output_tokens=500
+                temperature=settings.gemini_temperature,
+                max_output_tokens=2048,
+                top_p=0.95,
+                top_k=40
             ),
             safety_settings={
-                'HARM_CATEGORY_HARASSMENT': 'BLOCK_NONE',
-                'HARM_CATEGORY_HATE_SPEECH': 'BLOCK_NONE',
-                'HARM_CATEGORY_SEXUALLY_EXPLICIT': 'BLOCK_NONE',
-                'HARM_CATEGORY_DANGEROUS_CONTENT': 'BLOCK_NONE'
+                genai.types.HarmCategory.HARM_CATEGORY_HATE_SPEECH: genai.types.HarmBlockThreshold.BLOCK_NONE,
+                genai.types.HarmCategory.HARM_CATEGORY_HARASSMENT: genai.types.HarmBlockThreshold.BLOCK_NONE,
+                genai.types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: genai.types.HarmBlockThreshold.BLOCK_NONE,
+                genai.types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: genai.types.HarmBlockThreshold.BLOCK_NONE,
             }
         )
         
@@ -183,11 +186,13 @@ Remember: Be helpful, concise, and human-like. One clear step at a time!
                 logger.info(f"[LLM] RAG Context provided: {len(rag_context)} chars")
             logger.info(f"[LLM] Conversation history: {len(conversation)} messages")
             
-            # Build prompt
+            # Build prompt - use more context for resumed chats (up to 10 messages)
             full_prompt = f"{system_prompt}\n\n"
-            for msg in conversation[-5:]:  # Last 5 messages for context
+            context_msgs = conversation[-10:]  # Last 10 messages for better context
+            for msg in context_msgs:
                 role = "User" if msg["role"] == "user" else "Assistant"
-                full_prompt += f"{role}: {msg['parts'][0]}\n"
+                content = msg['parts'][0][:800]  # Limit message length
+                full_prompt += f"{role}: {content}\n"
             
             full_prompt += "\nAssistant:"
             
@@ -195,27 +200,35 @@ Remember: Be helpful, concise, and human-like. One clear step at a time!
             response = self.model.generate_content(full_prompt)
             
             # Check if response was blocked by safety filters
-            if not response or not response.text:
-                logger.warning("[LLM] Empty response or safety filter block")
+            bot_response = None
+            try:
+                if response and response.text:
+                    bot_response = response.text.strip()
+            except Exception as text_error:
+                # response.text throws exception when blocked by safety filters
+                logger.warning(f"[LLM] Safety filter or empty response: {text_error}")
                 
+            if not bot_response:
                 # Try with simpler prompt (without RAG context that might trigger filters)
                 if rag_context:
                     logger.info("[LLM] Retrying without RAG context...")
                     simple_prompt = self.get_system_prompt(None) + "\n\n"
-                    for msg in conversation[-5:]:
+                    for msg in context_msgs:
                         role = "User" if msg["role"] == "user" else "Assistant"
-                        simple_prompt += f"{role}: {msg['parts'][0]}\n"
+                        content = msg['parts'][0][:800]
+                        simple_prompt += f"{role}: {content}\n"
                     simple_prompt += "\nAssistant:"
                     
-                    response = self.model.generate_content(simple_prompt)
+                    try:
+                        response = self.model.generate_content(simple_prompt)
+                        if response and response.text:
+                            bot_response = response.text.strip()
+                    except Exception as retry_error:
+                        logger.warning(f"[LLM] Retry also failed: {retry_error}")
                     
-                if not response or not response.text:
-                    logger.warning("[LLM] Still blocked, using generic fallback")
-                    bot_response = "I'm having trouble processing that. Could you rephrase what you need help with?"
-                else:
-                    bot_response = response.text.strip()
-            else:
-                bot_response = response.text.strip()
+            if not bot_response:
+                logger.warning("[LLM] All attempts failed, using friendly fallback")
+                bot_response = "I'm having trouble processing that. Could you rephrase what you need help with?"
             
             # Add bot response to history
             self.add_message(user_email, "assistant", bot_response)
@@ -240,6 +253,18 @@ Remember: Be helpful, concise, and human-like. One clear step at a time!
             
         except Exception as e:
             logger.error(f"[LLM] Error processing message: {e}")
+            
+            # Check if it's a rate limit error
+            error_str = str(e)
+            if "429" in error_str or "quota" in error_str.lower() or "rate limit" in error_str.lower():
+                return {
+                    "message": "I'm currently experiencing high demand. Please try again in a few seconds, or I can connect you with our support team for immediate assistance.",
+                    "is_technical": False,
+                    "should_escalate": True,
+                    "is_resolved": False,
+                    "metadata": {"error": "rate_limit", "details": str(e)[:200]}
+                }
+            
             return {
                 "message": "I encountered an issue. Let me connect you with our support team who can help you better.",
                 "is_technical": False,

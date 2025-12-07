@@ -312,60 +312,122 @@ class TicketIntelligenceAgent:
     
     def _generate_title_with_llm(self, conversation_history: List[Dict]) -> tuple:
         """Use LLM to generate a meaningful ticket title from conversation."""
+        # CRITICAL: Only use RECENT messages from THIS conversation session
+        # Filter out old messages that might be from previous sessions
+        recent_messages = conversation_history[-8:]  # Last 8 messages max
+        
+        # CRITICAL FIX: Filter to only include TECHNICAL messages
+        # Skip non-technical chat like "my bike is not starting"
+        tech_keywords = [
+            'laptop', 'computer', 'phone', 'app', 'software', 'error', 'crash',
+            'slow', 'freeze', 'network', 'wifi', 'vpn', 'password', 'login',
+            'printer', 'monitor', 'keyboard', 'mouse', 'webcam', 'microphone',
+            'headphones', 'speaker', 'audio', 'sound', 'video', 'camera',
+            'storage', 'disk', 'ssd', 'memory', 'ram', 'update', 'install',
+            'not working', 'broken', 'issue', 'problem', 'help', 'fix'
+        ]
+        
+        # Find only technical messages for title generation
+        technical_messages = [
+            m for m in recent_messages
+            if m['role'] == 'user' and any(kw in m.get('content', '').lower() for kw in tech_keywords)
+        ]
+        
+        # Also include assistant responses to technical messages
+        if technical_messages:
+            last_tech_idx = max(
+                i for i, m in enumerate(recent_messages) 
+                if m in technical_messages
+            )
+            # Include messages from first technical message onwards
+            first_tech_idx = min(
+                i for i, m in enumerate(recent_messages) 
+                if m in technical_messages
+            )
+            relevant_messages = recent_messages[first_tech_idx:]
+        else:
+            relevant_messages = recent_messages
+        
         # Format conversation for LLM
         conv_text = "\n".join([
             f"{'User' if m['role'] == 'user' else 'Agent'}: {m.get('content', '')}"
-            for m in conversation_history[-10:]  # Last 10 messages
+            for m in relevant_messages
         ])
         
+        logger.info(f"[TICKET-AI] Generating title from {len(relevant_messages)} relevant messages")
+        
         prompt = f"""Analyze this IT support conversation and generate a clear, professional ticket title.
+
+IMPORTANT: Focus ONLY on the MAIN technical issue described by the user. Ignore greetings, confirmations, or casual responses.
 
 Conversation:
 {conv_text}
 
 Generate a ticket title that:
-1. Describes the MAIN technical issue (not user responses like "okay" or "I can't do this")
-2. Is concise (5-10 words)
-3. Is professional and actionable
-4. Includes the affected device/system if mentioned
+1. Describes the SPECIFIC technical issue mentioned by the user
+2. MUST include the device/system name (laptop, microphone, phone, etc.)
+3. MUST include the specific problem (not working, crashing, slow, etc.)
+4. Is concise (5-10 words)
+5. Format: "[Device/System] [Problem Description]"
 
 Examples of GOOD titles:
-- "SSD storage full - cleanup assistance needed"
+- "Laptop microphone not working"
+- "CMM-Manager System Error 23904"
+- "SSD storage full - cleanup needed"
 - "PlayStation not powering on"
-- "Laptop slow performance after Windows update"
-- "WiFi connectivity issues on home network"
-- "Headphones not detected by laptop"
+- "WiFi not connecting on laptop"
+- "Headphones not recognized by Windows"
 
-Examples of BAD titles (DO NOT generate these):
-- "I can't do right now"
-- "okay"
-- "still not working"
-- "User needs help"
+Examples of BAD titles (NEVER generate these):
+- "Device not functioning properly" (too generic!)
+- "Error messages appearing" (too vague!)
+- "Technical issue" (useless!)
+- "User needs help" (obvious!)
 
 Respond with ONLY the ticket title, nothing else:"""
 
-        response = self.model.generate_content(prompt)
-        
-        if response and response.text:
-            title = response.text.strip().strip('"').strip("'")
-            # Clean up any markdown or extra formatting
-            title = title.replace("**", "").replace("*", "")
-            if title.startswith("Title:"):
-                title = title[6:].strip()
+        try:
+            response = self.model.generate_content(prompt)
             
-            # Generate description
-            description = f"Issue: {title}\n\nConversation summary:\n"
-            user_msgs = [m.get('content', '') for m in conversation_history if m['role'] == 'user']
-            for i, msg in enumerate(user_msgs[:5], 1):
-                if len(msg) > 10:  # Skip short responses
-                    description += f"- {msg}\n"
-            
-            return title, description
+            if response and response.text:
+                title = response.text.strip().strip('"').strip("'")
+                # Clean up any markdown or extra formatting
+                title = title.replace("**", "").replace("*", "")
+                if title.startswith("Title:"):
+                    title = title[6:].strip()
+                
+                # VALIDATION: Reject generic titles, force fallback
+                bad_titles = [
+                    'device not functioning properly',
+                    'error messages appearing',
+                    'technical issue',
+                    'user needs help',
+                    'not working'
+                ]
+                if title.lower() in bad_titles or len(title) < 10:
+                    logger.warning(f"[TICKET-AI] LLM returned generic title: '{title}', will try fallback")
+                    return None, None
+                
+                logger.info(f"[TICKET-AI] LLM generated title: '{title}'")
+                
+                # Generate description from TECHNICAL messages only
+                description = f"Issue: {title}\n\nConversation summary:\n"
+                tech_user_msgs = [m.get('content', '') for m in technical_messages]
+                for msg in tech_user_msgs[:5]:
+                    if len(msg) > 10:  # Skip short responses
+                        description += f"- {msg}\n"
+                
+                return title, description
+            else:
+                logger.warning("[TICKET-AI] LLM returned empty response for title")
+                
+        except Exception as e:
+            logger.error(f"[TICKET-AI] LLM title generation error: {e}")
         
         return None, None
     
     def _generate_title_rules(self, user_messages: List[str], conv_lower: str) -> tuple:
-        """Fallback: Generate title using rule-based approach."""
+        """Fallback: Generate title using rule-based approach - SPECIFIC to device + issue."""
         # Extended technical keywords to identify actual issue messages
         tech_keywords = [
             'slow', 'crash', 'error', 'not working', 'problem', 'issue',
@@ -373,7 +435,9 @@ Respond with ONLY the ticket title, nothing else:"""
             'laptop', 'computer', 'phone', 'app', 'software', 'full',
             'storage', 'space', 'ssd', 'disk', 'clean', 'turning on',
             'not turning', 'headphones', 'audio', 'sound', 'video',
-            'playstation', 'xbox', 'wifi', 'internet', 'connection'
+            'playstation', 'xbox', 'wifi', 'internet', 'connection',
+            'microphone', 'webcam', 'camera', 'speaker', 'monitor',
+            'keyboard', 'mouse', 'printer'
         ]
         
         # Find the FIRST message that contains technical keywords (not just greetings)
@@ -389,35 +453,78 @@ Respond with ONLY the ticket title, nothing else:"""
             non_greeting_msgs = [m for m in user_messages if len(m) > 15 and m.lower() not in ['hi', 'hello', 'hey', 'okay', 'ok', 'yes', 'no']]
             issue_text = max(non_greeting_msgs, key=len) if non_greeting_msgs else "Technical support request"
         
-        # Generate title from templates
-        title_templates = {
-            'slow': 'Performance degradation issue',
-            'full': 'Storage space issue - cleanup needed',
-            'ssd': 'SSD storage issue',
-            'storage': 'Storage space management',
-            'crash': 'Application crashing issue',
-            'not working': 'Device not functioning properly',
-            'not turning': 'Device not powering on',
-            'error': 'Error messages appearing',
-            'vpn': 'VPN connection issues',
-            'wifi': 'WiFi connectivity problems',
-            'internet': 'Internet connectivity issues',
-            'login': 'Login/access issues',
-            'headphones': 'Headphones/audio device issue',
-            'playstation': 'PlayStation issue',
-            'xbox': 'Xbox issue'
+        # IMPROVED: Detect device AND issue to build specific title
+        device = None
+        issue = None
+        
+        # Device detection (priority order)
+        device_map = {
+            'microphone': 'Microphone', 'mic': 'Microphone',
+            'webcam': 'Webcam', 'camera': 'Camera',
+            'headphones': 'Headphones', 'headset': 'Headset',
+            'speaker': 'Speaker', 'speakers': 'Speakers',
+            'laptop': 'Laptop', 'computer': 'Computer', 'pc': 'PC',
+            'phone': 'Phone', 'iphone': 'iPhone', 'android': 'Android phone',
+            'monitor': 'Monitor', 'display': 'Display',
+            'keyboard': 'Keyboard', 'mouse': 'Mouse',
+            'printer': 'Printer', 'scanner': 'Scanner',
+            'ssd': 'SSD', 'hard drive': 'Hard Drive',
+            'wifi': 'WiFi', 'network': 'Network', 'vpn': 'VPN',
+            'playstation': 'PlayStation', 'ps4': 'PS4', 'ps5': 'PS5',
+            'xbox': 'Xbox', 'switch': 'Nintendo Switch',
+            'browser': 'Browser', 'chrome': 'Chrome', 'firefox': 'Firefox',
+            'outlook': 'Outlook', 'teams': 'Teams', 'word': 'Word',
         }
         
-        title = issue_text[:60]  # Default to first issue message
-        
-        for keyword, template_title in title_templates.items():
-            if keyword in conv_lower:
-                title = template_title
+        for kw, dev_name in device_map.items():
+            if kw in conv_lower:
+                device = dev_name
                 break
         
-        # Generate description
-        description = f"Issue: {issue_text}\n\nUser messages:\n"
-        for msg in user_messages[:5]:
+        # Issue detection (priority order)
+        issue_map = {
+            'not working': 'not working',
+            'not recognized': 'not recognized',
+            'no sound': 'no sound output',
+            'no audio': 'no audio output',
+            'slow': 'running slow',
+            'crash': 'crashing',
+            'freeze': 'freezing',
+            'full': 'storage full',
+            'not connecting': 'not connecting',
+            'not turning on': 'not powering on',
+            'wont turn on': 'not powering on',
+            'error': 'showing error',
+            'cant login': 'login issues',
+            "can't login": 'login issues',
+            'locked': 'locked out',
+        }
+        
+        for kw, issue_desc in issue_map.items():
+            if kw in conv_lower:
+                issue = issue_desc
+                break
+        
+        # Build specific title
+        if device and issue:
+            title = f"{device} {issue}"
+        elif device:
+            title = f"{device} issue"
+        elif issue:
+            title = f"Device {issue}"
+        else:
+            # Last resort: use first technical message truncated
+            title = issue_text[:60].strip()
+            if not title.endswith('.'):
+                # Remove incomplete words
+                if ' ' in title:
+                    title = ' '.join(title.split()[:-1])
+        
+        logger.info(f"[TICKET-AI] Rule-based title: '{title}' (device={device}, issue={issue})")
+        
+        # Generate description from TECHNICAL messages only
+        description = f"Issue: {title}\n\nUser messages:\n"
+        for msg in technical_messages[:5]:
             if len(msg) > 10:
                 description += f"- {msg}\n"
         

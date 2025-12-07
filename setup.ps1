@@ -35,6 +35,41 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
+# Initialize RBAC database
+Write-Host ""
+Write-Host "=========================================" -ForegroundColor Cyan
+Write-Host "Initializing RBAC System" -ForegroundColor Cyan
+Write-Host "=========================================" -ForegroundColor Cyan
+Write-Host "Setting up Role-Based Access Control..." -ForegroundColor White
+
+$currentDir = Get-Location
+Set-Location backend
+
+try {
+    $initDbOutput = & ..\venv\Scripts\python.exe init_db.py 2>&1
+    $initDbExitCode = $LASTEXITCODE
+    
+    Write-Host $initDbOutput
+    
+    if ($initDbExitCode -eq 0) {
+        Write-Host ""
+        Write-Host "[OK] RBAC System initialized successfully!" -ForegroundColor Green
+        Write-Host "   Database: backend\data\processed\auto_ops.db" -ForegroundColor Gray
+        Write-Host ""
+        Write-Host "Admin User Credentials:" -ForegroundColor Yellow
+        Write-Host "  Email:    admin@acme.com" -ForegroundColor White
+        Write-Host "  Password: admin123" -ForegroundColor White
+    } else {
+        Write-Host ""
+        Write-Host "⚠️  RBAC database initialization had issues" -ForegroundColor Yellow
+        Write-Host "   The system will still work, but user authentication may not be available." -ForegroundColor Yellow
+        Write-Host "   You can retry later by running:" -ForegroundColor Cyan
+        Write-Host "   cd backend; ..\venv\Scripts\python.exe init_db.py" -ForegroundColor White
+    }
+} finally {
+    Set-Location $currentDir
+}
+
 # Setup .env file
 if (-not (Test-Path "backend\.env")) {
     if (Test-Path "backend\.env.example") {
@@ -103,17 +138,33 @@ Write-Host "=========================================" -ForegroundColor Green
 Write-Host "Setup Complete!" -ForegroundColor Green
 Write-Host "=========================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "Next Steps:" -ForegroundColor Yellow
+Write-Host "Components Installed:" -ForegroundColor Yellow
+
+# Check RBAC database
+if (Test-Path "backend\data\processed\auto_ops.db") {
+    Write-Host "[OK] RBAC Database initialized" -ForegroundColor Green
+} else {
+    Write-Host "[!] RBAC Database not initialized" -ForegroundColor Yellow
+}
 
 # Check if vector DB was created
 if (Test-Path "backend\data\processed\chroma_db") {
-    Write-Host "✅ Vector database is ready!" -ForegroundColor Green
-    Write-Host ""
-    Write-Host "To start the application:" -ForegroundColor Cyan
-    Write-Host "  .\run.ps1" -ForegroundColor White
+    Write-Host "✅ Vector database ready" -ForegroundColor Green
 } else {
     Write-Host "⚠️  Vector database not yet created" -ForegroundColor Yellow
+}
+
+Write-Host ""
+Write-Host "Next Steps:" -ForegroundColor Yellow
+
+if (Test-Path "backend\data\processed\chroma_db") {
+    Write-Host "To start the application:" -ForegroundColor Cyan
+    Write-Host "  .\run.ps1" -ForegroundColor White
     Write-Host ""
+    Write-Host "API will be available at:" -ForegroundColor Cyan
+    Write-Host "  http://localhost:8000" -ForegroundColor White
+    Write-Host "  http://localhost:8000/docs (API Documentation)" -ForegroundColor White
+} else {
     Write-Host "To create the vector database:" -ForegroundColor Cyan
     Write-Host "  1. Ensure data file exists: data\raw\ticketing_system_data_new.json" -ForegroundColor White
     Write-Host "  2. Add your GOOGLE_API_KEY to backend\.env" -ForegroundColor White

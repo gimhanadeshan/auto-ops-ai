@@ -3,7 +3,7 @@ import { API_ENDPOINTS } from '../config/constants'
 
 /**
  * Reports Service
- * Handles report generation and export
+ * Handles report generation, export, and analytics data
  */
 export const reportsService = {
   /**
@@ -24,5 +24,49 @@ export const reportsService = {
       format,
       ...params
     })
+  },
+
+  /**
+   * Get ticket statistics summary
+   */
+  async getTicketStats() {
+    return httpClient.get('/api/v1/tickets/stats/summary')
+  },
+
+  /**
+   * Get all tickets for analytics
+   * @param {Object} params - Query parameters (limit, skip, filters)
+   */
+  async getTickets(params = {}) {
+    return httpClient.get('/api/v1/tickets', params)
+  },
+
+  /**
+   * Get system health prediction
+   * @param {Object} metrics - System metrics data
+   */
+  async predictHealth(metrics = {}) {
+    return httpClient.post('/api/v1/predict-health', metrics)
+  },
+
+  /**
+   * Get real system metrics
+   */
+  async getSystemMetrics() {
+    return httpClient.get('/api/v1/system-metrics')
+  },
+
+  /**
+   * Get system stats (CPU, RAM, Disk usage, etc.)
+   */
+  async getSystemStats() {
+    return httpClient.get('/api/v1/monitoring/stats')
+  },
+
+  /**
+   * Check system health
+   */
+  async checkSystemHealth() {
+    return httpClient.post('/api/v1/monitoring/check-systems', {})
   }
 }

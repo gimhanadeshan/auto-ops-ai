@@ -1,10 +1,17 @@
 import os
 import json
+import sys
 from pathlib import Path
+from unittest.mock import MagicMock
+
+# Mock onnxruntime BEFORE importing chromadb to avoid Windows DLL issues
+sys.modules['onnxruntime'] = MagicMock()
+
 from dotenv import load_dotenv
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_chroma import Chroma
-from langchain_core.documents import Document 
+from langchain_core.documents import Document
+import chromadb
 
 # Load environment variables
 load_dotenv()
@@ -818,9 +825,15 @@ Knowledge Base: {ticket.get('knowledge_base_id', 'N/A')}
         shutil.rmtree(db_path)
         print("🗑️  Removed old database")
     
+    # Create ChromaDB client with settings to avoid ONNX runtime
+    chroma_client = chromadb.PersistentClient(
+        path=str(db_path)
+    )
+    
     vector_store = Chroma.from_documents(
         documents=documents,
         embedding=embeddings,
+        client=chroma_client,
         persist_directory=str(db_path)
     )
     
