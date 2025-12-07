@@ -30,8 +30,10 @@ frontend/package-lock.json
 logs/
 *.log
 
-# Data (root only)
+# Data (root only, but allow raw data directory structure)
 /data/
+!/data/raw
+!/data/raw/.gitkeep
 
 # OS
 Thumbs.db
