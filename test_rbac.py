@@ -5,6 +5,10 @@ Tests authentication, permissions, and audit logging.
 import requests
 import json
 from typing import Dict
+import pytest
+
+# Skip in automated runs; this is a manual integration script that expects a live backend
+pytestmark = pytest.mark.skip(reason="Integration script requires running backend and real users; not suitable for CI")
 
 BASE_URL = "http://localhost:8000/api"
 
