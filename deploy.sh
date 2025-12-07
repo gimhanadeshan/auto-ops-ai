@@ -162,7 +162,7 @@ if [ -f "$DB_PATH" ]; then
     echo "✅ Database file exists"
 else
     echo "🔄 Database not found - initializing..."
-    if docker-compose -f docker-compose.deploy.yml exec -T backend python backend/init_db.py; then
+    if docker-compose -f docker-compose.deploy.yml exec -T backend python init_db.py; then
         echo "✅ Database initialized successfully"
     else
         echo "❌ Database initialization failed"
@@ -197,7 +197,7 @@ if [ "$ADMIN_EXISTS" = "1" ]; then
     echo "✅ Admin user exists (admin@acme.com)"
 else
     echo "🔄 Admin user not found - creating via init_db.py..."
-    if docker-compose -f docker-compose.deploy.yml exec -T backend python backend/init_db.py; then
+    if docker-compose -f docker-compose.deploy.yml exec -T backend python init_db.py; then
         echo "✅ Admin user created successfully"
         echo "   Email: admin@acme.com"
         echo "   Password: admin123"
@@ -226,7 +226,7 @@ if [ "$USERS_COUNT" -gt 1 ]; then
     echo "✅ Seed data already loaded"
 else
     echo "🔄 Loading seed data and creating vector database..."
-    if docker-compose -f docker-compose.deploy.yml exec -T backend python backend/ingestion_script.py; then
+    if docker-compose -f docker-compose.deploy.yml exec -T backend python ingestion_script.py; then
         echo "✅ Seed data and vector database created successfully"
     else
         echo "⚠️  Ingestion script had issues (this is often expected for Windows paths)"
