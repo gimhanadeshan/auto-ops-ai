@@ -236,10 +236,12 @@ sleep 20
 # Step 11: Initialize database (skip if already exists)
 echo ""
 echo "1️⃣1️⃣ Checking database status..."
-DB_PATH="./backend/data/auto_ops.db"
-VECTOR_DB_PATH="./backend/data/processed/chroma_db"
+DB_PATH="/app/data/auto_ops.db"
 
-if [ -f "$DB_PATH" ]; then
+# Check if database exists inside the container
+DB_EXISTS=$(docker-compose -f docker-compose.deploy.yml exec -T backend sh -c "[ -f $DB_PATH ] && echo '1' || echo '0'" 2>/dev/null || echo "0")
+
+if [ "$DB_EXISTS" = "1" ]; then
     echo "✅ Database file exists"
 else
     echo "🔄 Database not found - initializing..."
@@ -254,7 +256,10 @@ fi
 # Step 11b: Check vector database
 echo ""
 echo "1️⃣1️⃣b Checking vector database (ChromaDB) status..."
-if [ -d "$VECTOR_DB_PATH" ]; then
+VECTOR_DB_PATH="/app/data/processed/chroma_db"
+VECTOR_EXISTS=$(docker-compose -f docker-compose.deploy.yml exec -T backend sh -c "[ -d $VECTOR_DB_PATH ] && echo '1' || echo '0'" 2>/dev/null || echo "0")
+
+if [ "$VECTOR_EXISTS" = "1" ]; then
     echo "✅ Vector database already exists"
 else
     echo "🔄 Vector database not found - will be created during ingestion"
@@ -341,8 +346,8 @@ echo "======================================"
 echo ""
 echo "📊 Deployment Summary:"
 echo "   Code Changes:        $([ "$REBUILD_NEEDED" = true ] && echo "YES - Images rebuilt" || echo "NO - Used cached images")"
-echo "   Database:            $([ -f "$DB_PATH" ] && echo "✅ Created & initialized" || echo "⚠️  Not found")"
-echo "   Vector Database:     $([ -d "$VECTOR_DB_PATH" ] && echo "✅ Created" || echo "⚠️  Not created yet")"
+echo "   Database:            $([ "$DB_EXISTS" = "1" ] && echo "✅ Created & initialized" || echo "⚠️  Not found")"
+echo "   Vector Database:     $([ "$VECTOR_EXISTS" = "1" ] && echo "✅ Created" || echo "⚠️  Not created yet")"
 echo "   Admin User:          $([ "$ADMIN_EXISTS" = "1" ] && echo "✅ Exists" || echo "❌ Not seeded")"
 echo "   Backend Health:      $([ "$HEALTH_STATUS" = "healthy" ] && echo "✅ Healthy" || echo "⚠️  Starting")"
 echo ""
