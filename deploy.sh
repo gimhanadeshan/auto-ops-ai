@@ -55,19 +55,29 @@ cd /app
 echo ""
 echo "3️⃣  Cloning repository..."
 REBUILD_NEEDED=false
+DOCKERFILE_CHANGED=false
 
 if [ ! -d .git ]; then
     git clone https://github.com/gimhanadeshan/auto-ops-ai.git .
     REBUILD_NEEDED=true
 else
     # Check if there are new changes
+    PREV_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "")
     git fetch origin main
     LOCAL=$(git rev-parse HEAD)
     REMOTE=$(git rev-parse origin/main)
     
     if [ "$LOCAL" != "$REMOTE" ]; then
-        echo "📝 Code changes detected - will rebuild images"
-        REBUILD_NEEDED=true
+        echo "📝 Code changes detected"
+        # Check if Dockerfile was changed
+        if git diff $LOCAL $REMOTE --name-only | grep -q "Dockerfile"; then
+            echo "⚠️  Dockerfile changed - will rebuild all images"
+            DOCKERFILE_CHANGED=true
+            REBUILD_NEEDED=true
+        else
+            echo "📝 Other changes detected - will rebuild images"
+            REBUILD_NEEDED=true
+        fi
         git checkout -f origin/main
     else
         echo "✓ Code is up-to-date - using cached images"
