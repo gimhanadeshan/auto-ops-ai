@@ -182,6 +182,17 @@ jobs:
             ufw allow 8000/tcp || true
             ufw allow 80/tcp || true
             
+            # Wait for services to stabilize
+            echo "⏳ Waiting for services to stabilize..."
+            sleep 20
+            
+            # Initialize database and seed data
+            echo "📦 Initializing database..."
+            docker-compose -f docker-compose.deploy.yml exec -T backend python backend/init_db.py || true
+            
+            echo "🌱 Loading seed data..."
+            docker-compose -f docker-compose.deploy.yml exec -T backend python backend/ingestion_script.py || true
+            
             # Check health
             sleep 10
             docker-compose -f docker-compose.deploy.yml ps
