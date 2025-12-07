@@ -269,17 +269,11 @@ else
     fi
 fi
 
-# Step 11b: Check vector database
+# Step 11b: Check vector database (MOVED AFTER INGESTION)
 echo ""
 echo "1️⃣1️⃣b Checking vector database (ChromaDB) status..."
 VECTOR_DB_PATH="/app/data/processed/chroma_db"
-VECTOR_EXISTS=$(docker-compose -f docker-compose.deploy.yml exec -T backend sh -c "[ -d $VECTOR_DB_PATH ] && echo '1' || echo '0'" 2>/dev/null || echo "0")
-
-if [ "$VECTOR_EXISTS" = "1" ]; then
-    echo "✅ Vector database already exists"
-else
-    echo "🔄 Vector database not found - will be created during ingestion"
-fi
+# Will check after ingestion runs
 
 # Step 12: Check admin user and seed data
 echo ""
@@ -334,6 +328,11 @@ else
         echo "⚠️  Ingestion script had issues (this is often expected for Windows paths)"
     fi
 fi
+
+# NOW check vector database after ingestion
+echo ""
+echo "1️⃣3️⃣b Checking vector database after ingestion..."
+VECTOR_EXISTS=$(docker-compose -f docker-compose.deploy.yml exec -T backend sh -c "[ -d $VECTOR_DB_PATH ] && echo '1' || echo '0'" 2>/dev/null || echo "0")
 
 # Step 14: Final verification
 echo ""
