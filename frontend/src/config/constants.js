@@ -3,7 +3,9 @@
 const getAPIBaseURL = () => {
   // If VITE_API_BASE_URL is set via environment, use it
   if (import.meta.env.VITE_API_BASE_URL) {
-    return import.meta.env.VITE_API_BASE_URL;
+    let url = import.meta.env.VITE_API_BASE_URL;
+    // Remove trailing /api/v1 if present - we'll add it in endpoints
+    return url.replace(/\/api\/v1\/?$/, '');
   }
   
   // Otherwise, use current hostname with :8000
