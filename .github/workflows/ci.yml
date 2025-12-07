@@ -125,13 +125,21 @@ jobs:
           key: ${{ secrets.DIGITALOCEAN_SSH_KEY }}
           port: 22
           passphrase: ${{ secrets.DIGITALOCEAN_SSH_PASSPHRASE }}
-          envs: DOCKER_HUB_USERNAME,DOCKER_HUB_PASSWORD
+          envs: DOCKER_HUB_USERNAME,DOCKER_HUB_PASSWORD,GITHUB_TOKEN
           timeout: 30m
           command_timeout: 10m
           script: |
             # Create app directory if it doesn't exist
             mkdir -p /app
             cd /app
+
+            # Ensure required tooling is present
+            if ! command -v docker >/dev/null 2>&1; then
+              echo "Docker is not installed. Run setup-droplet-deploy.sh on the droplet first." && exit 1
+            fi
+            if ! command -v docker-compose >/dev/null 2>&1; then
+              echo "docker-compose is not installed. Run setup-droplet-deploy.sh on the droplet first." && exit 1
+            fi
             
             # Initialize git repo if not already done
             if [ ! -d .git ]; then
@@ -139,9 +147,12 @@ jobs:
               git remote add origin https://github.com/gimhanadeshan/auto-ops-ai.git
             fi
             
-            # Pull latest code
+            # Pull latest code using GitHub token
+            git config credential.helper store
+            echo "https://x-access-token:${GITHUB_TOKEN}@github.com" > ~/.git-credentials
             git fetch origin main
             git checkout -f origin/main
+            rm -f ~/.git-credentials
             
             # Login to Docker
             echo "$DOCKER_HUB_PASSWORD" | docker login -u "$DOCKER_HUB_USERNAME" --password-stdin
