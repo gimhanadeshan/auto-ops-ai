@@ -35,6 +35,10 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 # Copy application code
 COPY --chown=appuser:appuser backend/app /app/app
 
+# Copy initialization and ingestion scripts
+COPY --chown=appuser:appuser backend/init_db.py /app/init_db.py
+COPY --chown=appuser:appuser backend/ingestion_script.py /app/ingestion_script.py
+
 # Switch to non-root user
 USER appuser
 
