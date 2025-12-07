@@ -25,7 +25,8 @@ def init_database():
     db_path = "data/processed/auto_ops.db"
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
     
-    # First, check if database exists and has old schema
+    # First, check if database exists
+    db_already_exists = False
     if os.path.exists(db_path):
         print("[i] Existing database detected, checking schema...")
         try:
@@ -57,7 +58,8 @@ def init_database():
                         except:
                             print(f"[!] Failed to remove database, using fresh schema")
                 else:
-                    print("[OK] Database schema is up to date")
+                    print("[OK] Database schema is up to date, skipping recreation")
+                    db_already_exists = True
                     conn.close()
             else:
                 conn.close()
@@ -74,10 +76,12 @@ def init_database():
     from app.models.role import Role
     from app.core.security import get_password_hash
     
-    # Drop and recreate all tables to ensure fresh schema
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
-    print("[OK] Database tables created successfully")
+    # Only create tables if database doesn't already exist
+    if not db_already_exists:
+        Base.metadata.create_all(bind=engine)
+        print("[OK] Database tables created successfully")
+    else:
+        print("[OK] Database already exists, skipping table creation")
     
     return SessionLocal, UserDB, Role, get_password_hash
 
