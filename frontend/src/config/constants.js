@@ -1,6 +1,7 @@
 // API Configuration
 export const API_CONFIG = {
-  BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://138.68.228.105:8000/api/v1',
+  BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://138.68.228.105:8000',
+  API_PREFIX: '/api/v1',
   TIMEOUT: 10000,
   RETRY_ATTEMPTS: 3
 }

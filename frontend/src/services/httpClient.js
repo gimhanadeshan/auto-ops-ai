@@ -5,8 +5,9 @@ import { STORAGE_KEYS } from '../config/constants'
  * Base HTTP client with error handling and authentication
  */
 class HttpClient {
-  constructor(baseURL = API_CONFIG.BASE_URL) {
+  constructor(baseURL = API_CONFIG.BASE_URL, apiPrefix = API_CONFIG.API_PREFIX) {
     this.baseURL = baseURL
+    this.apiPrefix = apiPrefix
     this.timeout = API_CONFIG.TIMEOUT
   }
 
@@ -38,7 +39,7 @@ class HttpClient {
   }
 
   async request(endpoint, options = {}) {
-    const url = `${this.baseURL}${endpoint}`
+    const url = `${this.baseURL}${this.apiPrefix}${endpoint}`
     const config = {
       ...options,
       headers: this.getHeaders(options.headers)
