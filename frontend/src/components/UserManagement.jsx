@@ -609,11 +609,11 @@ function UserManagement() {
               </select>
             </div>
 
-            {selectedManager && availableManagers.find(m => m.id == selectedManager) && (
+            {selectedManager && availableManagers.find(m => m.id === selectedManager) && (
               <div className="selected-manager-info">
                 <h4>Selected Manager</h4>
                 {(() => {
-                  const mgr = availableManagers.find(m => m.id == selectedManager);
+                  const mgr = availableManagers.find(m => m.id === selectedManager);
                   return (
                     <div>
                       <p><strong>Name:</strong> {mgr.name}</p>
