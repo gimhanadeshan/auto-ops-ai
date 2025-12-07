@@ -37,7 +37,9 @@ COPY --chown=appuser:appuser backend/app /app/app
 
 # Copy initialization and ingestion scripts
 COPY --chown=appuser:appuser backend/init_db.py /app/init_db.py
+COPY --chown=appuser:appuser backend/check_config.py /app/check_config.py
 COPY --chown=appuser:appuser backend/ingestion_script.py /app/ingestion_script.py
+COPY --chown=appuser:appuser backend/migrations.py /app/migrations.py
 
 # Switch to non-root user
 USER appuser

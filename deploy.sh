@@ -27,6 +27,15 @@ fi
 if [ -z "$GOOGLE_API_KEY" ]; then
     echo "⚠️  Warning: GOOGLE_API_KEY not set - bot will not function"
     echo "   Please add GOOGLE_API_KEY secret to GitHub repository settings"
+    echo ""
+    echo "   Steps to fix:"
+    echo "   1. Go to: https://github.com/gimhanadeshan/auto-ops-ai"
+    echo "   2. Settings > Secrets and variables > Actions"
+    echo "   3. Click 'New repository secret'"
+    echo "   4. Name: GOOGLE_API_KEY"
+    echo "   5. Value: Your actual API key from https://makersuite.google.com/app/apikey"
+    echo "   6. Click 'Add secret'"
+    echo "   7. Push a commit to trigger deployment"
 fi
 
 echo "📍 Droplet IP: $DROPLET_IP"
@@ -135,7 +144,18 @@ DATABASE_URL=sqlite:///./data/processed/auto_ops.db
 SECRET_KEY=auto-ops-ai-secret-key-change-in-production
 ENVIRONMENT=production
 EOF
-echo "✅ Backend .env created"
+
+# Validate GOOGLE_API_KEY was written correctly
+if grep -q "^GOOGLE_API_KEY=$" backend/.env; then
+    echo "❌ ERROR: GOOGLE_API_KEY is empty in production .env"
+    echo "   Bot will NOT function in production"
+    echo "   Please verify GitHub Secret is set and deployment includes GOOGLE_API_KEY"
+    exit 1
+elif grep -q "^GOOGLE_API_KEY=" backend/.env; then
+    echo "✅ Backend .env created with API key"
+else
+    echo "⚠️  Warning: Could not verify GOOGLE_API_KEY in .env"
+fi
 
 # Create frontend .env
 mkdir -p frontend
@@ -370,6 +390,17 @@ fi
 echo ""
 echo "1️⃣5️⃣ Container status:"
 docker-compose -f docker-compose.deploy.yml ps
+
+# Step 16: Run configuration check
+echo ""
+echo "1️⃣6️⃣ Verifying critical configuration..."
+if docker-compose -f docker-compose.deploy.yml exec -T backend python check_config.py 2>/dev/null; then
+    CONFIG_OK="true"
+    echo ""
+else
+    CONFIG_OK="false"
+    echo "⚠️  Configuration check failed"
+fi
 
 # Cleanup
 docker logout
