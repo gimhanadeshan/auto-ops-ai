@@ -125,7 +125,7 @@ jobs:
           key: ${{ secrets.DIGITALOCEAN_SSH_KEY }}
           port: 22
           passphrase: ${{ secrets.DIGITALOCEAN_SSH_PASSPHRASE }}
-          envs: DOCKER_HUB_USERNAME,DOCKER_HUB_PASSWORD,GITHUB_TOKEN
+          envs: DOCKER_HUB_USERNAME,DOCKER_HUB_PASSWORD,GITHUB_TOKEN,GOOGLE_API_KEY
           timeout: 30m
           command_timeout: 10m
           script: |
@@ -157,19 +157,27 @@ jobs:
             # Login to Docker
             echo "$DOCKER_HUB_PASSWORD" | docker login -u "$DOCKER_HUB_USERNAME" --password-stdin
             
+            # Set environment variables for docker-compose
+            export DROPLET_IP=$(hostname -I | awk '{print $1}')
+            
             # Pull latest images
             docker pull $DOCKER_HUB_USERNAME/auto-ops-ai-backend:latest
             docker pull $DOCKER_HUB_USERNAME/auto-ops-ai-frontend:latest
             
             # Stop and remove old containers
-            docker-compose -f docker-compose.prod.yml down || true
+            docker-compose -f docker-compose.deploy.yml down || true
             
             # Start new containers
-            docker-compose -f docker-compose.prod.yml up -d
+            DOCKER_HUB_USERNAME=$DOCKER_HUB_USERNAME GOOGLE_API_KEY=$GOOGLE_API_KEY docker-compose -f docker-compose.deploy.yml up -d
+            
+            # Open firewall ports
+            ufw allow 8000/tcp || true
+            ufw allow 80/tcp || true
             
             # Check health
             sleep 10
-            docker-compose -f docker-compose.prod.yml ps
+            docker-compose -f docker-compose.deploy.yml ps
+            docker-compose -f docker-compose.deploy.yml logs --tail=50
             
             # Cleanup
             docker logout
