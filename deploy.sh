@@ -51,39 +51,57 @@ echo "2️⃣  Preparing /app directory..."
 mkdir -p /app
 cd /app
 
-# Step 3: Clone/update repository
+# Step 3: Clone/update repository (with retry)
 echo ""
 echo "3️⃣  Cloning repository..."
 REBUILD_NEEDED=false
 DOCKERFILE_CHANGED=false
+GIT_RETRY=0
+GIT_MAX_RETRIES=3
 
-if [ ! -d .git ]; then
-    git clone https://github.com/gimhanadeshan/auto-ops-ai.git .
-    REBUILD_NEEDED=true
-else
-    # Check if there are new changes
-    PREV_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "")
-    git fetch origin main
-    LOCAL=$(git rev-parse HEAD)
-    REMOTE=$(git rev-parse origin/main)
-    
-    if [ "$LOCAL" != "$REMOTE" ]; then
-        echo "📝 Code changes detected"
-        # Check if Dockerfile was changed
-        if git diff $LOCAL $REMOTE --name-only | grep -q "Dockerfile"; then
-            echo "⚠️  Dockerfile changed - will rebuild all images"
-            DOCKERFILE_CHANGED=true
+while [ $GIT_RETRY -lt $GIT_MAX_RETRIES ]; do
+    if [ ! -d .git ]; then
+        if git clone https://github.com/gimhanadeshan/auto-ops-ai.git . 2>/dev/null; then
             REBUILD_NEEDED=true
-        else
-            echo "📝 Other changes detected - will rebuild images"
-            REBUILD_NEEDED=true
+            break
         fi
-        git checkout -f origin/main
     else
-        echo "✓ Code is up-to-date - using cached images"
-        REBUILD_NEEDED=false
+        # Check if there are new changes
+        PREV_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "")
+        if git fetch origin main 2>/dev/null; then
+            LOCAL=$(git rev-parse HEAD)
+            REMOTE=$(git rev-parse origin/main)
+            
+            if [ "$LOCAL" != "$REMOTE" ]; then
+                echo "📝 Code changes detected"
+                # Check if Dockerfile was changed
+                if git diff $LOCAL $REMOTE --name-only | grep -q "Dockerfile"; then
+                    echo "⚠️  Dockerfile changed - will rebuild all images"
+                    DOCKERFILE_CHANGED=true
+                    REBUILD_NEEDED=true
+                else
+                    echo "📝 Other changes detected - will rebuild images"
+                    REBUILD_NEEDED=true
+                fi
+                git checkout -f origin/main
+            else
+                echo "✓ Code is up-to-date - using cached images"
+                REBUILD_NEEDED=false
+            fi
+            break
+        fi
     fi
-fi
+    
+    GIT_RETRY=$((GIT_RETRY + 1))
+    if [ $GIT_RETRY -lt $GIT_MAX_RETRIES ]; then
+        echo "⚠️  Git operation failed (attempt $GIT_RETRY/$GIT_MAX_RETRIES) - retrying in 10 seconds..."
+        sleep 10
+    else
+        echo "❌ Git operation failed after $GIT_MAX_RETRIES attempts"
+        exit 1
+    fi
+done
+
 echo "✅ Repository updated"
 
 # Step 4: Create environment files
