@@ -98,7 +98,6 @@ function TicketList() {
     try {
       setLoadingAssignableUsers(true)
       const token = localStorage.getItem('token')
-      console.log('🎫 Token available for users:', token ? 'YES' : 'NO')
       const { getAssignableUsers } = await import('../services/userService')
       const users = await getAssignableUsers()
       console.log('Assignable users loaded:', users)
