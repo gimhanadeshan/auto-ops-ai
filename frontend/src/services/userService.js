@@ -4,7 +4,7 @@
  */
 import { httpClient } from './httpClient';
 
-const API_BASE = '/api/v1/admin';
+const API_BASE = '/admin';
 
 /**
  * Get all users with optional filtering

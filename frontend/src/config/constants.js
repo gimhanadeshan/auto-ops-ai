@@ -1,7 +1,7 @@
 // API Configuration
 export const API_CONFIG = {
-  BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://138.68.228.105:8000',
-  API_PREFIX: '/api/v1',
+  // VITE_API_BASE_URL should include /api/v1 if needed (handled in .env files)
+  BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1',
   TIMEOUT: 10000,
   RETRY_ATTEMPTS: 3
 }
@@ -19,7 +19,11 @@ export const API_ENDPOINTS = {
   // Chat endpoints
   CHAT: {
     SEND_MESSAGE: '/chat',
-    GET_HISTORY: '/chat/history'
+    GET_HISTORY: '/chat/history',
+    RESET: '/chat/reset',
+    GET_SESSIONS: '/chat/sessions',
+    RESUME: '/chat/resume',
+    IMAGE: '/chat/image'
   },
   
   // Ticket endpoints
@@ -33,20 +37,27 @@ export const API_ENDPOINTS = {
   
   // Dashboard endpoints
   DASHBOARD: {
-    STATS: '/dashboard/stats',
-    RECENT_ISSUES: '/dashboard/recent-issues'
+    OVERVIEW: '/dashboard/overview',
+    STATS: '/dashboard/overview',
+    TRENDS: '/dashboard/trends',
+    RECENT_ISSUES: '/dashboard/recent-tickets',
+    CATEGORY_BREAKDOWN: '/dashboard/category-breakdown',
+    PRIORITY_DISTRIBUTION: '/dashboard/priority-distribution',
+    RESPONSE_TIME: '/dashboard/response-time'
   },
   
   // Monitoring endpoints
   MONITORING: {
-    SYSTEM_METRICS: '/monitoring/metrics',
-    SERVICES: '/monitoring/services',
-    LOGS: '/monitoring/logs',
-    CHECK_HEALTH: '/monitoring/check-systems',
-    STATS: '/monitoring/stats'
+    CHECK_HEALTH: '/check-systems',
+    SYSTEM_METRICS: '/metrics',
+    STATS: '/stats',
+    SERVICES: '/system-status',
+    LOGS: '/sample-logs',
+    METRICS: '/metrics',
+    SIMULATE_CRASH: '/simulate-crash'
   },
   
-  // Reports endpoints
+  // Reports endpoints (not yet implemented in backend)
   REPORTS: {
     GENERATE: '/reports',
     EXPORT: '/reports/export'
@@ -54,6 +65,25 @@ export const API_ENDPOINTS = {
   
   // Status endpoint
   STATUS: '/status',
+  
+  // Actions endpoints
+  ACTIONS: {
+    AVAILABLE: '/available',
+    GET_BY_ID: (id) => `/action/${id}`,
+    SUGGEST: '/suggest',
+    PROACTIVE: '/proactive',
+    REQUEST: '/request',
+    APPROVE: '/approve',
+    EXECUTE: (id) => `/execute/${id}`,
+    PENDING: '/pending',
+    HISTORY: '/history',
+    DIAGNOSE_PROCESSES: '/diagnose/processes',
+    DIAGNOSE_SYSTEM: '/diagnose/system',
+    DIAGNOSE_NETWORK: '/diagnose/network',
+    DIAGNOSE_DISK: '/diagnose/disk',
+    ANALYZE: '/analyze',
+    QUICK_FIX: (issueType) => `/quick-fix/${issueType}`
+  },
   
   // Static data endpoints
   STATIC_DATA: {

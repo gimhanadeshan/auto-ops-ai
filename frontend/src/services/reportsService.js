@@ -30,7 +30,7 @@ export const reportsService = {
    * Get ticket statistics summary
    */
   async getTicketStats() {
-    return httpClient.get('/api/v1/tickets/stats/summary')
+    return httpClient.get('/tickets/stats/summary')
   },
 
   /**
@@ -38,7 +38,7 @@ export const reportsService = {
    * @param {Object} params - Query parameters (limit, skip, filters)
    */
   async getTickets(params = {}) {
-    return httpClient.get('/api/v1/tickets', params)
+    return httpClient.get('/tickets', params)
   },
 
   /**
@@ -46,27 +46,27 @@ export const reportsService = {
    * @param {Object} metrics - System metrics data
    */
   async predictHealth(metrics = {}) {
-    return httpClient.post('/api/v1/predict-health', metrics)
+    return httpClient.post('/predict-health', metrics)
   },
 
   /**
    * Get real system metrics
    */
   async getSystemMetrics() {
-    return httpClient.get('/api/v1/system-metrics')
+    return httpClient.get('/system-metrics')
   },
 
   /**
    * Get system stats (CPU, RAM, Disk usage, etc.)
    */
   async getSystemStats() {
-    return httpClient.get('/api/v1/monitoring/stats')
+    return httpClient.get('/stats')
   },
 
   /**
    * Check system health
    */
   async checkSystemHealth() {
-    return httpClient.post('/api/v1/monitoring/check-systems', {})
+    return httpClient.post('/check-systems', {})
   }
 }

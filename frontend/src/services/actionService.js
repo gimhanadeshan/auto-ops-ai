@@ -2,8 +2,9 @@
  * Action Service - Handles automated remediation actions
  */
 import { API_CONFIG } from '../config/constants';
+import { httpClient } from './httpClient';
 
-const API_BASE_URL = API_CONFIG.BASE_URL + '/api/v1';
+const API_BASE_URL = API_CONFIG.BASE_URL;
 
 /**
  * Get all available actions

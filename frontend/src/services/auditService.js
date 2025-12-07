@@ -4,7 +4,7 @@
  */
 import { httpClient } from './httpClient';
 
-const API_BASE = '/api/v1/admin';
+const API_BASE = '/admin';
 
 /**
  * Get audit logs with optional filtering (Admin only)
