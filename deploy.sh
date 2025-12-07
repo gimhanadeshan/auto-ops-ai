@@ -92,28 +92,28 @@ VITE_API_BASE_URL=http://${DROPLET_IP}:8000/api/v1
 EOF
 echo "✅ Frontend .env created"
 
-# Step 5: Login to Docker Hub
+# Step 5: Stop old containers and clear caches
 echo ""
-echo "5️⃣  Logging in to Docker Hub..."
-echo "$DOCKER_HUB_PASSWORD" | docker login -u "$DOCKER_HUB_USERNAME" --password-stdin
-echo "✅ Docker Hub login successful"
-
-# Step 6: Pull latest images
-echo ""
-echo "6️⃣  Pulling latest Docker images..."
-docker pull $DOCKER_HUB_USERNAME/auto-ops-ai-backend:latest
-docker pull $DOCKER_HUB_USERNAME/auto-ops-ai-frontend:latest
-echo "✅ Images pulled successfully"
-
-# Step 7: Stop old containers
-echo ""
-echo "7️⃣  Stopping old containers..."
+echo "5️⃣  Stopping old containers and clearing caches..."
 docker-compose -f docker-compose.deploy.yml down || true
-echo "✅ Old containers stopped"
+docker system prune -f --volumes || true
+echo "✅ Old containers stopped, caches cleared"
+
+# Step 6: Build backend image with latest code
+echo ""
+echo "6️⃣  Building backend Docker image (no cache)..."
+docker build --no-cache -t $DOCKER_HUB_USERNAME/auto-ops-ai-backend:latest -f Dockerfile .
+echo "✅ Backend image built"
+
+# Step 7: Build frontend image with latest code and new .env
+echo ""
+echo "7️⃣  Building frontend Docker image (no cache)..."
+docker build --no-cache -t $DOCKER_HUB_USERNAME/auto-ops-ai-frontend:latest -f frontend/dockerfile frontend/
+echo "✅ Frontend image built with new configuration"
 
 # Step 8: Start new containers
 echo ""
-echo "8️⃣  Starting new containers..."
+echo "8️⃣  Starting containers..."
 docker-compose -f docker-compose.deploy.yml up -d
 echo "✅ Containers started"
 
