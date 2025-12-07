@@ -1,6 +1,6 @@
 // API Configuration
 export const API_CONFIG = {
-  BASE_URL: 'http://138.68.228.105:8000/api/v1' || 'http://www.prompto.gimhana.live:8000/api/v1',
+  BASE_URL: 'http://138.68.228.105:8000'||'http://www.prompto.gimhana.live:8000',
   TIMEOUT: 10000,
   RETRY_ATTEMPTS: 3
 }
@@ -9,10 +9,10 @@ export const API_CONFIG = {
 export const API_ENDPOINTS = {
   // Auth endpoints
   AUTH: {
-    LOGIN: '/login',
-    REGISTER: '/register',
-    LOGOUT: '/logout',
-    REFRESH: '/refresh'
+    LOGIN: '/api/v1/login',
+    REGISTER: '/api/v1/register',
+    LOGOUT: '/api/v1/logout',
+    REFRESH: '/api/v1/refresh'
   },
   
   // Chat endpoints
@@ -23,11 +23,11 @@ export const API_ENDPOINTS = {
   
   // Ticket endpoints
   TICKETS: {
-    GET_ALL: '/tickets',
-    GET_BY_ID: (id) => `/tickets/${id}`,
-    CREATE: '/tickets',
-    UPDATE: (id) => `/tickets/${id}`,
-    DELETE: (id) => `/tickets/${id}`
+    GET_ALL: '/api/v1/tickets',
+    GET_BY_ID: (id) => `/api/v1/tickets/${id}`,
+    CREATE: '/api/v1/tickets',
+    UPDATE: (id) => `/api/v1/tickets/${id}`,
+    DELETE: (id) => `/api/v1/tickets/${id}`
   },
   
   // Dashboard endpoints
@@ -38,11 +38,11 @@ export const API_ENDPOINTS = {
   
   // Monitoring endpoints
   MONITORING: {
-    SYSTEM_METRICS: '/monitoring/metrics',
-    SERVICES: '/monitoring/services',
-    LOGS: '/monitoring/logs',
-    CHECK_HEALTH: '/monitoring/check-systems',
-    STATS: '/monitoring/stats'
+    SYSTEM_METRICS: '/api/v1/monitoring/metrics',
+    SERVICES: '/api/v1/monitoring/services',
+    LOGS: '/api/v1/monitoring/logs',
+    CHECK_HEALTH: '/api/v1/monitoring/check-systems',
+    STATS: '/api/v1/monitoring/stats'
   },
   
   // Reports endpoints
@@ -56,9 +56,9 @@ export const API_ENDPOINTS = {
   
   // Static data endpoints
   STATIC_DATA: {
-    QUICK_ACTIONS: '/quick-actions',
-    ERROR_CODES: '/error-codes',
-    ERROR_CODES_BY_PLATFORM: (platform) => `/error-codes/${platform}`
+    QUICK_ACTIONS: '/api/v1/quick-actions',
+    ERROR_CODES: '/api/v1/error-codes',
+    ERROR_CODES_BY_PLATFORM: (platform) => `/api/v1/error-codes/${platform}`
   }
 }
 

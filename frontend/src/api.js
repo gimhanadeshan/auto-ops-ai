@@ -1,6 +1,5 @@
 // API utility for backend integration
-import { API_CONFIG } from './config/constants';
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || API_CONFIG.BASE_URL;
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api/v1';
 
 export async function fetchBackendStatus(options = {}) {
   const { signal, timeout = 5000 } = options;

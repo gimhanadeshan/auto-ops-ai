@@ -3,7 +3,7 @@
  */
 import { API_CONFIG } from '../config/constants';
 
-const API_BASE_URL = API_CONFIG.BASE_URL;
+const API_BASE_URL = API_CONFIG.BASE_URL + '/api/v1';
 
 /**
  * Get all available actions
