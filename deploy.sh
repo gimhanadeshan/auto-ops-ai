@@ -54,11 +54,25 @@ cd /app
 # Step 3: Clone/update repository
 echo ""
 echo "3️⃣  Cloning repository..."
+REBUILD_NEEDED=false
+
 if [ ! -d .git ]; then
     git clone https://github.com/gimhanadeshan/auto-ops-ai.git .
+    REBUILD_NEEDED=true
 else
+    # Check if there are new changes
     git fetch origin main
-    git checkout -f origin/main
+    LOCAL=$(git rev-parse HEAD)
+    REMOTE=$(git rev-parse origin/main)
+    
+    if [ "$LOCAL" != "$REMOTE" ]; then
+        echo "📝 Code changes detected - will rebuild images"
+        REBUILD_NEEDED=true
+        git checkout -f origin/main
+    else
+        echo "✓ Code is up-to-date - using cached images"
+        REBUILD_NEEDED=false
+    fi
 fi
 echo "✅ Repository updated"
 
@@ -98,12 +112,20 @@ echo "5️⃣  Logging in to Docker Hub..."
 echo "$DOCKER_HUB_PASSWORD" | docker login -u "$DOCKER_HUB_USERNAME" --password-stdin
 echo "✅ Docker Hub login successful"
 
-# Step 6: Pull latest images
+# Step 6: Pull latest images or build if changes detected
 echo ""
-echo "6️⃣  Pulling latest Docker images..."
-docker pull $DOCKER_HUB_USERNAME/auto-ops-ai-backend:latest
-docker pull $DOCKER_HUB_USERNAME/auto-ops-ai-frontend:latest
-echo "✅ Images pulled successfully"
+echo "6️⃣  Processing Docker images..."
+
+if [ "$REBUILD_NEEDED" = true ]; then
+    echo "🔨 Building new images from source..."
+    docker-compose -f docker-compose.deploy.yml build --no-cache
+    echo "✅ Images built successfully"
+else
+    echo "📦 Pulling latest pre-built images..."
+    docker pull $DOCKER_HUB_USERNAME/auto-ops-ai-backend:latest || echo "⚠️  Backend image not found - will build from source"
+    docker pull $DOCKER_HUB_USERNAME/auto-ops-ai-frontend:latest || echo "⚠️  Frontend image not found - will build from source"
+    echo "✅ Images processed"
+fi
 
 # Step 7: Stop old containers
 echo ""
@@ -130,17 +152,38 @@ echo ""
 echo "🔟 Waiting for services to stabilize..."
 sleep 20
 
-# Step 11: Initialize database
+# Step 11: Initialize database (skip if already exists)
 echo ""
-echo "1️⃣1️⃣ Initializing database..."
-docker-compose -f docker-compose.deploy.yml exec -T backend python backend/init_db.py || true
-echo "✅ Database initialized"
+echo "1️⃣1️⃣ Checking database status..."
+DB_PATH="./backend/data/auto_ops.db"
 
-# Step 12: Load seed data
+if [ -f "$DB_PATH" ]; then
+    echo "✅ Database already exists - skipping initialization"
+else
+    echo "🔄 Database not found - initializing..."
+    docker-compose -f docker-compose.deploy.yml exec -T backend python backend/init_db.py || true
+    echo "✅ Database initialized"
+fi
+
+# Step 12: Load seed data (only if database was newly created)
 echo ""
-echo "1️⃣2️⃣ Loading seed data..."
-docker-compose -f docker-compose.deploy.yml exec -T backend python backend/ingestion_script.py || true
-echo "✅ Seed data loaded"
+echo "1️⃣2️⃣ Checking seed data status..."
+# Check if users table has data
+USERS_COUNT=$(docker-compose -f docker-compose.deploy.yml exec -T backend python -c "
+from app.core.database import SessionLocal
+from app.models.user import UserDB
+session = SessionLocal()
+count = session.query(UserDB).count()
+print(count)
+" 2>/dev/null || echo "0")
+
+if [ "$USERS_COUNT" -gt 0 ]; then
+    echo "✅ Seed data already loaded - skipping ingestion"
+else
+    echo "🔄 Loading seed data..."
+    docker-compose -f docker-compose.deploy.yml exec -T backend python backend/ingestion_script.py || true
+    echo "✅ Seed data loaded"
+fi
 
 # Step 13: Verify deployment
 echo ""
@@ -154,6 +197,11 @@ echo ""
 echo "======================================"
 echo "✅ Deployment Complete!"
 echo "======================================"
+echo ""
+echo "📊 Deployment Summary:"
+echo "   Code Changes:     $([ "$REBUILD_NEEDED" = true ] && echo "YES - Images rebuilt" || echo "NO - Used cached images")"
+echo "   Database:         $([ -f "$DB_PATH" ] && echo "Existing (preserved)" || echo "New (initialized)")"
+echo "   Seed Data:        $([ "$USERS_COUNT" -gt 0 ] && echo "Already loaded" || echo "Newly loaded")"
 echo ""
 echo "🌐 Access your application:"
 echo "   Frontend:  http://$DROPLET_IP"
