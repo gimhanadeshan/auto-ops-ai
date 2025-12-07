@@ -95,6 +95,9 @@ jobs:
           push: true
           tags: ${{ steps.meta-backend.outputs.tags }}
           labels: ${{ steps.meta-backend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          no-cache: true
       
       - name: Build and push frontend image
         uses: docker/build-push-action@v5
