@@ -2,10 +2,11 @@ import { useState, useEffect, useRef } from 'react'
 import { BarChart3, TrendingUp, Calendar, Download, AlertTriangle } from 'lucide-react'
 import { reportsService } from '../services/reportsService'
 import { pdfService } from '../services/pdfService'
+import SLARiskReport from './SLARiskReport'
 import '../styles/components/Reports.css'
 
 function Reports() {
-  const [reportType, setReportType] = useState('tickets')
+  const [reportType, setReportType] = useState('sla')
   const [dateRange, setDateRange] = useState('7days')
   const [customStartDate, setCustomStartDate] = useState('')
   const [customEndDate, setCustomEndDate] = useState('')
@@ -176,16 +177,18 @@ function Reports() {
         // Process tickets for category data
         const categoryMap = {}
         tickets.forEach(ticket => {
-          const category = ticket.category || 'Other'
-          categoryMap[category] = (categoryMap[category] || 0) + 1
+          const category = ticket.category
+          if (category && category.toLowerCase() !== 'other') {
+            categoryMap[category] = (categoryMap[category] || 0) + 1
+          }
         })
         
-        const total = tickets.length || 1
+        const validTickets = Object.values(categoryMap).reduce((sum, count) => sum + count, 0) || 1
         const categories = Object.entries(categoryMap)
           .map(([category, count]) => ({
             category,
             count,
-            percentage: Math.round((count / total) * 100)
+            percentage: Math.round((count / validTickets) * 100)
           }))
           .sort((a, b) => b.count - a.count)
         
@@ -247,13 +250,19 @@ function Reports() {
 
     const now = new Date()
     tickets.forEach(ticket => {
-      const ticketDate = new Date(ticket.created_at || ticket.created_date || now)
-      const daysDiff = Math.floor((now - ticketDate) / (1000 * 60 * 60 * 24))
+      if (!ticket.created_at) return
       
-      if (daysDiff < 7) weeklyCount['Week 1']++
-      else if (daysDiff < 14) weeklyCount['Week 2']++
-      else if (daysDiff < 21) weeklyCount['Week 3']++
-      else if (daysDiff < 28) weeklyCount['Week 4']++
+      try {
+        const ticketDate = new Date(ticket.created_at)
+        const daysDiff = Math.floor((now - ticketDate) / (1000 * 60 * 60 * 24))
+        
+        if (daysDiff >= 0 && daysDiff < 7) weeklyCount['Week 4']++
+        else if (daysDiff >= 7 && daysDiff < 14) weeklyCount['Week 3']++
+        else if (daysDiff >= 14 && daysDiff < 21) weeklyCount['Week 2']++
+        else if (daysDiff >= 21 && daysDiff < 28) weeklyCount['Week 1']++
+      } catch (err) {
+        console.error('Error parsing ticket date:', err)
+      }
     })
 
     return Object.entries(weeklyCount).map(([week, tickets]) => ({ week, tickets }))
@@ -408,10 +417,21 @@ function Reports() {
     )
 
     switch (reportType) {
+      case 'sla':
+        return (
+          <>
+            {/* SLA Risk Analysis - Full Width */}
+            <div className="report-card report-card-full-width">
+              <SLARiskReport />
+            </div>
+          </>
+        )
+
       case 'tickets':
         return (
           <>
             {baseStats}
+
             <div className="reports-grid">
               <div className="report-card">
                 <div className="card-header">
@@ -467,7 +487,9 @@ function Reports() {
                   )}
                 </div>
               </div>
+            </div>
 
+            <div className="reports-grid">
               <div className="report-card">
                 <div className="card-header">
                   <h3>
@@ -700,6 +722,7 @@ function Reports() {
         <div className="control-group">
           <label>Report Type:</label>
           <select value={reportType} onChange={(e) => setReportType(e.target.value)}>
+            <option value="sla">SLA Risk Analysis</option>
             <option value="tickets">Ticket Summary</option>
             <option value="performance">Performance</option>
             <option value="system">System Health</option>
@@ -708,6 +731,13 @@ function Reports() {
         <div className="control-group">
           <label>Date Range:</label>
           <select value={dateRange} onChange={(e) => setDateRange(e.target.value)}>
+            {reportType === 'sla' && (
+              <>
+                <option value="7days">Last 7 Days</option>
+                <option value="30days">Last 30 Days</option>
+                <option value="90days">Last 90 Days</option>
+              </>
+            )}
             {reportType === 'tickets' && (
               <>
                 <option value="today">Today</option>

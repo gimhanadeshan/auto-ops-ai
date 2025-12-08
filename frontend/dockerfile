@@ -10,10 +10,10 @@ ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 # Copy package files
 COPY package.json package-lock.json* ./
 
-# Install dependencies
-RUN npm install
+# Install dependencies inside container for Alpine Linux
+RUN npm ci || npm install
 
-# Copy source code
+# Copy source code (exclude node_modules)
 COPY . .
 
 # Build the app (environment variables are available here)

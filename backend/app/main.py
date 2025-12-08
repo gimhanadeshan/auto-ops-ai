@@ -10,6 +10,7 @@ from app.core.database import init_db
 from app.core.logging_config import setup_logging, get_logger
 import importlib
 from app.api.endpoints import prediction_monitoring
+from app.api.endpoints import analytics
 # Importing API endpoint modules lazily later so missing optional packages
 # (e.g. langchain) won't prevent the app from starting during development.
 
@@ -102,6 +103,7 @@ try:
     )
     app.include_router(prediction_monitoring.router, 
                        prefix=f"{settings.api_prefix}/prediction_monitoring")
+    app.include_router(analytics.router, prefix=f"{settings.api_prefix}/analytics")
 except Exception as e:
     logger.warning(f"Could not include status endpoint at startup: {e}")
 
