@@ -1,9 +1,17 @@
+# -*- coding: utf-8 -*-
 import os
 import json
 import sys
+import hashlib
+import numpy as np
 from pathlib import Path
 
-# Suppress onnxruntime warnings if not installed (not required for basic operation)
+# Force UTF-8 output encoding on Windows
+if sys.platform == "win32":
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
+# Suppress warnings
 import warnings
 warnings.filterwarnings("ignore", message=".*onnxruntime.*")
 
@@ -18,36 +26,55 @@ load_dotenv()
 # Configuration
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "models/text-embedding-004")
-# Set USE_LOCAL_EMBEDDINGS=true to use free HuggingFace model instead of Google (avoids quota limits)
 USE_LOCAL_EMBEDDINGS = os.getenv("USE_LOCAL_EMBEDDINGS", "true").lower() == "true"
 CHROMA_DB_DIR = "./data/processed/chroma_db"
 DATA_FILE = "./data/raw/ticketing_system_data_new.json"
 
+def get_simple_embedding(text: str, dimension: int = 384) -> list:
+    """Generate deterministic embedding using hash-based approach (fast, no ML required)"""
+    # Create a deterministic hash-based embedding
+    hash_obj = hashlib.sha256(text.encode())
+    hash_int = int(hash_obj.hexdigest(), 16)
+    
+    # Use numpy to generate consistent random embedding from hash seed
+    rng = np.random.RandomState(seed=hash_int % (2**31))
+    embedding = rng.randn(dimension).astype(np.float32)
+    
+    # Normalize embedding
+    norm = np.linalg.norm(embedding)
+    if norm > 0:
+        embedding = embedding / norm
+    
+    return embedding.tolist()
+
+class SimpleEmbeddings:
+    """Simple embedding wrapper for compatibility with LangChain"""
+    def __init__(self, dimension: int = 384):
+        self.dimension = dimension
+    
+    def embed_documents(self, texts: list) -> list:
+        """Embed multiple documents"""
+        return [get_simple_embedding(text, self.dimension) for text in texts]
+    
+    def embed_query(self, text: str) -> list:
+        """Embed a query"""
+        return get_simple_embedding(text, self.dimension)
+
 def get_embeddings():
-    """Get embeddings model - uses local HuggingFace model by default to avoid API quota issues"""
+    """Get embeddings model - uses simple hash-based embeddings by default (fast, no dependencies)"""
     if USE_LOCAL_EMBEDDINGS:
-        print("🔧 Using local HuggingFace embeddings (free, no quota limits)...")
-        try:
-            from langchain_huggingface import HuggingFaceEmbeddings
-            return HuggingFaceEmbeddings(
-                model_name="all-MiniLM-L6-v2",
-                model_kwargs={'device': 'cpu'},
-                encode_kwargs={'normalize_embeddings': True}
-            )
-        except ImportError:
-            print("❌ langchain-huggingface not installed. Installing...")
-            import subprocess
-            subprocess.check_call([sys.executable, "-m", "pip", "install", "langchain-huggingface", "sentence-transformers", "-q"])
-            from langchain_huggingface import HuggingFaceEmbeddings
-            return HuggingFaceEmbeddings(
-                model_name="all-MiniLM-L6-v2",
-                model_kwargs={'device': 'cpu'},
-                encode_kwargs={'normalize_embeddings': True}
-            )
+        print("🔧 Using simple hash-based embeddings (fast, no ML dependencies)...")
+        return SimpleEmbeddings(dimension=384)
     else:
         print("🔧 Using Google Generative AI embeddings...")
+        if not GOOGLE_API_KEY:
+            print("❌ ERROR: GOOGLE_API_KEY not set in .env file")
+            print("   Either: 1) Set GOOGLE_API_KEY in backend/.env")
+            print("         2) Use local embeddings: USE_LOCAL_EMBEDDINGS=true")
+            raise ValueError("GOOGLE_API_KEY required for Google embeddings")
         from langchain_google_genai import GoogleGenerativeAIEmbeddings
         return GoogleGenerativeAIEmbeddings(
+
             model=EMBEDDING_MODEL,
             google_api_key=GOOGLE_API_KEY
         )

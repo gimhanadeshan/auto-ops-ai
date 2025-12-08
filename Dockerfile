@@ -1,33 +1,26 @@
 # Multi-stage Docker build for Auto-Ops-AI Backend
 FROM python:3.11-slim AS builder
 
-# Build argument for CI/CD environments
-ARG CI_BUILD=false
-
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies (expanded for compilation needs)
-RUN apt-get update && apt-get install -y \
+# Install system dependencies (minimal for light build)
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
-    build-essential \
     libssl-dev \
     libffi-dev \
     python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy both requirements files
-COPY requirements.txt requirements-ci.txt ./
+# Copy requirements file
+COPY requirements.txt ./
 
-# Select requirements file based on CI_BUILD argument
-RUN if [ "$CI_BUILD" = "true" ]; then \
-        REQ_FILE="requirements-ci.txt"; \
-    else \
-        REQ_FILE="requirements.txt"; \
-    fi && \
-    pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir --prefer-binary --use-deprecated=legacy-resolver -r $REQ_FILE
+# Install dependencies with optimizations for faster builds
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir --prefer-binary \
+        --use-deprecated=legacy-resolver \
+        -r requirements.txt
 
 # Final stage
 FROM python:3.11-slim

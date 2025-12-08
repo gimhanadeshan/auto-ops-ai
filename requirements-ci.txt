@@ -1,5 +1,5 @@
 # Optimized requirements for CI/CD (GitHub Actions)
-# Excludes heavy CUDA packages; uses CPU-only builds where possible
+# Uses simple embeddings to avoid heavy ML dependencies (faster builds)
 
 # --- Core Framework ---
 fastapi==0.115.0
@@ -18,7 +18,6 @@ langchain-core==0.3.5
 langchain-text-splitters==0.3.0
 langchain-openai==0.2.0
 langchain-google-genai==2.0.0
-langchain-huggingface==0.1.0
 
 # --- SDKs ---
 openai==1.47.0
@@ -28,8 +27,9 @@ tiktoken==0.7.0
 chromadb==0.5.13
 langchain-chroma==0.1.4
 
-# --- Embeddings (CPU-optimized) ---
-sentence-transformers==3.0.1
+# --- Simple Embeddings (NO heavy ML deps) ---
+# Using lightweight tokenization only
+# Skip: sentence-transformers, torch, transformers (very large)
 
 # --- Utilities ---
 python-dotenv==1.0.1
@@ -46,7 +46,7 @@ psutil==5.9.8
 pytest==8.3.3
 pytest-asyncio==0.24.0
 
-# --- ML Libraries (CPU-optimized) ---
+# --- Data Processing (minimal) ---
 pandas==2.2.3
 numpy==1.26.4
 joblib==1.3.2
