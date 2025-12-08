@@ -24,7 +24,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements-ci.txt
       - name: Run tests
         run: pytest -q
 
@@ -64,6 +64,8 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
+          build-args: |
+            CI_BUILD=true
           tags: |
             ${{ env.BACKEND_IMAGE }}:latest
             ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
