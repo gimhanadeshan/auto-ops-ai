@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from app.core.database import get_db
 from app.models.ticket import TicketDB
 
-from app.services.sla_service import get_sla_service
+from app.services.sla_service import get_or_initialize_sla_service
 # Define the router
 router = APIRouter(tags=["Analytics"])
 
@@ -24,7 +24,7 @@ async def get_sla_risk_report(db: Session = Depends(get_db)):
     """
     try:
         # Get the SLA service (lazy loaded)
-        service = get_sla_service()
+        service = get_or_initialize_sla_service()
         
         # Get active tickets
         open_tickets = db.query(TicketDB).filter(
