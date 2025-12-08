@@ -41,6 +41,7 @@ async def lifespan(app: FastAPI):
         
         init_db()
         logger.info("Database initialized successfully")
+        logger.info("✅ Auto-applying pending migrations during startup")
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
         raise
