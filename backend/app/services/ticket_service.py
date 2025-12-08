@@ -11,7 +11,6 @@ from app.models.ticket import (
     TicketPriority, TicketCategory
 )
 from app.models.user import UserDB
-from app.services.assignment_service import get_assignment_service
 
 logger = logging.getLogger(__name__)
 
@@ -58,30 +57,11 @@ class TicketService:
         db.commit()
         db.refresh(db_ticket)
         
-        # 🆕 Smart Assignment (if not manually assigned)
+        # NOTE: We do NOT auto-assign on creation anymore!
+        # Assignment happens ONLY when AI agent cannot resolve and escalates.
+        # This allows the AI to try solving the issue first.
+        # See chat_simple.py for escalation-based assignment logic.
         assignment_result = None
-        if not db_ticket.assigned_to:
-            try:
-                assignment_service = get_assignment_service()
-                assignment_result = assignment_service.assign_ticket(db_ticket, db)
-                
-                if assignment_result and assignment_result.get('assigned_to'):
-                    db_ticket.status = TicketStatus.ASSIGNED_TO_HUMAN
-                    db.commit()
-                    db.refresh(db_ticket)
-                    
-                    logger.info(
-                        f"[TICKET] #{db_ticket.id} auto-assigned to "
-                        f"{assignment_result['assigned_to']} - "
-                        f"{assignment_result.get('reason', 'N/A')}"
-                    )
-            except Exception as e:
-                logger.error(f"[TICKET] Auto-assignment failed: {e}")
-                assignment_result = {
-                    "assigned_to": None,
-                    "reason": f"Assignment failed: {str(e)}",
-                    "confidence": 0.0
-                }
         
         return {
             "ticket": db_ticket,
