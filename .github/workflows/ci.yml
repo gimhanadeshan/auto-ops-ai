@@ -98,8 +98,23 @@ jobs:
           envs: DOCKER_HUB_USERNAME,DOCKER_HUB_PASSWORD,GOOGLE_API_KEY
           script_stop: true
           script: |
+            # Aggressive cleanup to free disk space
+            echo "🧹 Cleaning up disk space..."
+            sudo docker system prune -af --volumes 2>/dev/null || true
+            sudo docker container prune -af 2>/dev/null || true
+            sudo docker image prune -af 2>/dev/null || true
+            sudo docker volume prune -af 2>/dev/null || true
+            sudo apt-get clean 2>/dev/null || true
+            sudo apt-get autoclean 2>/dev/null || true
+            sudo apt-get autoremove -y 2>/dev/null || true
+            sudo rm -rf /tmp/* /var/tmp/* 2>/dev/null || true
+            sudo rm -rf /app 2>/dev/null || true
+            echo "📊 Disk space available:"
+            df -h / | tail -1
+            
+            # Clone and deploy
             cd /app || mkdir -p /app && cd /app
-            git clone https://github.com/gimhanadeshan/auto-ops-ai.git . 2>/dev/null || git fetch origin main && git checkout -f origin/main
+            git clone --depth 1 https://github.com/gimhanadeshan/auto-ops-ai.git . 2>/dev/null || git fetch origin main && git checkout -f origin/main
             chmod +x deploy.sh
             export DOCKER_HUB_USERNAME="$DOCKER_HUB_USERNAME"
             export DOCKER_HUB_PASSWORD="$DOCKER_HUB_PASSWORD"
