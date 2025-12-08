@@ -242,25 +242,25 @@ export const TICKET_CATEGORY = {
 
 // Ticket Category Labels
 export const TICKET_CATEGORY_LABELS = {
-  hardware: '🖥️ Hardware',
-  software: '💻 Software',
-  network: '🌐 Network',
-  account: '👤 Account',
-  performance: '⚡ Performance',
-  security: '🔒 Security',
-  other: '📋 Other'
+  hardware: 'Hardware',
+  software: 'Software',
+  network: 'Network',
+  account: 'Account',
+  performance: 'Performance',
+  security: 'Security',
+  other: 'Other'
 }
 
 // Specialization options for support agents
 export const AGENT_SPECIALIZATIONS = [
-  { value: 'hardware', label: '🖥️ Hardware', description: 'Physical devices, BSOD, repairs' },
-  { value: 'software', label: '💻 Software', description: 'Applications, performance, crashes' },
-  { value: 'network', label: '🌐 Network', description: 'VPN, connectivity, routing' },
-  { value: 'account', label: '👤 Account', description: 'Login, permissions, access' },
-  { value: 'security', label: '🔒 Security', description: 'Authentication, malware, policies' },
-  { value: 'critical', label: '🚨 Critical Issues', description: 'High-priority escalations' },
-  { value: 'vpn', label: '🔐 VPN', description: 'VPN-specific issues' },
-  { value: 'performance', label: '⚡ Performance', description: 'Optimization, speed issues' }
+  { value: 'hardware', label: 'Hardware', description: 'Physical devices, BSOD, repairs' },
+  { value: 'software', label: 'Software', description: 'Applications, performance, crashes' },
+  { value: 'network', label: 'Network', description: 'VPN, connectivity, routing' },
+  { value: 'account', label: 'Account', description: 'Login, permissions, access' },
+  { value: 'security', label: 'Security', description: 'Authentication, malware, policies' },
+  { value: 'critical', label: 'Critical Issues', description: 'High-priority escalations' },
+  { value: 'vpn', label: 'VPN', description: 'VPN-specific issues' },
+  { value: 'performance', label: 'Performance', description: 'Optimization, speed issues' }
 ]
 
 // User Roles
