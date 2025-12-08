@@ -7,6 +7,12 @@ Run this BEFORE starting the application if you have existing data.
 If this is a fresh database, init_db.py will create the table with these fields.
 """
 import sys
+import io
+# Fix Windows console encoding for emojis
+if sys.platform == 'win32':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
 from pathlib import Path
 
 # Add parent directory to path
