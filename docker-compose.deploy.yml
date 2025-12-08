@@ -2,7 +2,10 @@ version: '3.8'
 
 services:
   backend:
-    image: ${DOCKER_HUB_USERNAME}/auto-ops-ai-backend:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: auto-ops-ai-backend:latest
     container_name: auto-ops-ai-backend
     ports:
       - "8000:8000"
@@ -24,15 +27,15 @@ services:
       start_period: 40s
 
   frontend:
-    image: ${DOCKER_HUB_USERNAME}/auto-ops-ai-frontend:latest
-    container_name: auto-ops-ai-frontend
-    ports:
-      - "80:80"
     build:
       context: ./frontend
       dockerfile: dockerfile
       args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://${DROPLET_IP:-138.68.228.105}:8000/api/v1}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://138.68.228.105:8000/api/v1}
+    image: auto-ops-ai-frontend:latest
+    container_name: auto-ops-ai-frontend
+    ports:
+      - "80:80"
     depends_on:
       - backend
     restart: unless-stopped
