@@ -21,7 +21,7 @@ EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "models/text-embedding-004")
 # Set USE_LOCAL_EMBEDDINGS=true to use free HuggingFace model instead of Google (avoids quota limits)
 USE_LOCAL_EMBEDDINGS = os.getenv("USE_LOCAL_EMBEDDINGS", "true").lower() == "true"
 CHROMA_DB_DIR = "./data/processed/chroma_db"
-DATA_FILE = "/app/data/raw/ticketing_system_data_new.json"
+DATA_FILE = "./data/raw/ticketing_system_data_new.json"
 
 def get_embeddings():
     """Get embeddings model - uses local HuggingFace model by default to avoid API quota issues"""
