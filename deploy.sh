@@ -47,36 +47,9 @@ echo "   • Logs are stored in 'logs' volume (persists across deployments)"
 echo "   • Your data will NOT be reset during redeployment"
 echo ""
 
-# Step 1: Aggressive cleanup to free space
+# Step 1: Ensure tools are installed
 echo ""
-echo "1️⃣  Aggressive cleanup to free disk space..."
-
-# Remove old deployments
-rm -rf /app 2>/dev/null || true
-
-# Clean Docker aggressively
-docker system prune -af --volumes 2>/dev/null || true
-docker container prune -af 2>/dev/null || true
-docker image prune -af 2>/dev/null || true
-docker volume prune -af 2>/dev/null || true
-
-# Clean apt cache
-apt-get clean 2>/dev/null || true
-apt-get autoclean 2>/dev/null || true
-apt-get autoremove -y 2>/dev/null || true
-
-# Clean temp files
-rm -rf /tmp/* /var/tmp/* 2>/dev/null || true
-
-# Show disk space
-echo "📊 Disk space after cleanup:"
-df -h / | tail -1
-
-echo "✅ Cleanup complete"
-
-# Step 2: Ensure tools are installed
-echo ""
-echo "2️⃣  Checking Docker installation..."
+echo "1️⃣  Checking Docker installation..."
 if ! command -v docker &> /dev/null; then
     echo "❌ Docker not found. Installing..."
     curl -fsSL https://get.docker.com -o get-docker.sh
@@ -92,24 +65,15 @@ fi
 
 echo "✅ Docker tools ready"
 
-# Step 3: Prepare application directory
+# Step 2: Prepare application directory
 echo ""
-echo "3️⃣  Preparing /app directory..."
+echo "2️⃣  Preparing /app directory..."
 mkdir -p /app
 cd /app
 
-# Step 4: Clone/update repository (with retry and space check)
+# Step 3: Clone/update repository (with retry)
 echo ""
-echo "4️⃣  Cloning repository..."
-
-# Check available space
-AVAILABLE_SPACE=$(df /app | tail -1 | awk '{print $4}')
-if [ "$AVAILABLE_SPACE" -lt 2000000 ]; then
-    echo "❌ ERROR: Not enough disk space (need 2GB, have $(($AVAILABLE_SPACE/1024/1024))GB)"
-    echo "   Please free up disk space and try again"
-    exit 1
-fi
-
+echo "3️⃣  Cloning repository..."
 REBUILD_NEEDED=false
 DOCKERFILE_CHANGED=false
 GIT_RETRY=0
@@ -117,7 +81,7 @@ GIT_MAX_RETRIES=2
 
 while [ $GIT_RETRY -lt $GIT_MAX_RETRIES ]; do
     if [ ! -d .git ]; then
-        if git clone --depth 1 https://github.com/gimhanadeshan/auto-ops-ai.git . 2>/dev/null; then
+        if git clone https://github.com/gimhanadeshan/auto-ops-ai.git . 2>/dev/null; then
             REBUILD_NEEDED=true
             break
         fi
@@ -160,9 +124,9 @@ done
 
 echo "✅ Repository updated"
 
-# Step 5: Create environment files
+# Step 4: Create environment files
 echo ""
-echo "5️⃣  Creating environment configuration files..."
+echo "4️⃣  Creating environment configuration files..."
 
 # Create backend .env
 mkdir -p backend
@@ -201,9 +165,9 @@ VITE_API_BASE_URL=http://${DROPLET_IP}:8000/api/v1
 EOF
 echo "✅ Frontend .env created"
 
-# Step 6: Login to Docker Hub (with retry)
+# Step 5: Login to Docker Hub (with retry)
 echo ""
-echo "6️⃣  Logging in to Docker Hub..."
+echo "5️⃣  Logging in to Docker Hub..."
 MAX_RETRIES=2
 RETRY_COUNT=0
 
@@ -223,9 +187,9 @@ while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
     fi
 done
 
-# Step 7: Pull latest images or build if changes detected
+# Step 6: Pull latest images or build if changes detected
 echo ""
-echo "7️⃣  Processing Docker images..."
+echo "6️⃣  Processing Docker images..."
 
 if [ "$REBUILD_NEEDED" = true ]; then
     echo "🔨 Building new images from source..."
@@ -275,30 +239,30 @@ else
     fi
 fi
 
-# Step 8: Stop old containers
+# Step 7: Stop old containers
 echo ""
-echo "8️⃣  Stopping old containers..."
+echo "7️⃣  Stopping old containers..."
 docker-compose -f docker-compose.deploy.yml down || true
 echo "✅ Old containers stopped"
 
-# Step 9: Start new containers
+# Step 8: Start new containers
 echo ""
-echo "9️⃣  Starting new containers..."
+echo "8️⃣  Starting new containers..."
 echo "📍 API URL: http://${DROPLET_IP}:8000/api/v1"
 VITE_API_BASE_URL="http://${DROPLET_IP}:8000/api/v1" docker-compose -f docker-compose.deploy.yml up -d --build
 echo "✅ Containers started"
 
-# Step 10: Open firewall ports
+# Step 9: Open firewall ports
 echo ""
-echo "🔟 Configuring firewall..."
+echo "9️⃣  Configuring firewall..."
 ufw allow 8000/tcp || true
 ufw allow 80/tcp || true
 ufw allow 443/tcp || true
 echo "✅ Firewall configured"
 
-# Step 11: Wait for services with health check
+# Step 10: Wait for services with health check
 echo ""
-echo "1️⃣1️⃣ Waiting for backend to be ready..."
+echo "🔟 Waiting for backend to be ready..."
 HEALTH_WAIT=0
 MAX_WAIT=30
 while [ $HEALTH_WAIT -lt $MAX_WAIT ]; do
@@ -317,34 +281,44 @@ if [ $HEALTH_WAIT -ge $MAX_WAIT ]; then
     echo "⚠️  Backend didn't respond to health check (normal for first deployment)"
 fi
 
-# Step 12: Delete existing database and recreate fresh
+# Step 11: Initialize database (skip if already exists)
 echo ""
-echo "1️⃣2️⃣ Resetting database..."
+echo "1️⃣1️⃣ Checking database status..."
+# Step 10: Check database and initialize if needed
+echo ""
+echo "1️⃣0️⃣ Checking database persistence..."
+
+# Show current volume status
+echo "📁 Database volumes in use:"
+docker volume ls | grep backend-data || echo "   No volumes found yet"
 
 DB_PATH="/app/data/processed/auto_ops.db"
 
-# Delete database file
-echo "🔄 Removing existing database..."
-docker-compose -f docker-compose.deploy.yml exec -T backend sh -c "rm -f $DB_PATH" 2>/dev/null || true
-echo "   ✓ Database file deleted"
+# Check if database exists inside the container
+DB_EXISTS=$(docker-compose -f docker-compose.deploy.yml exec -T backend sh -c "[ -f $DB_PATH ] && echo '1' || echo '0'" 2>/dev/null || echo "0")
 
-# Delete volumes to ensure clean slate
-echo "🔄 Removing database volumes..."
-docker volume rm app_backend-data 2>/dev/null || true
-echo "   ✓ Volumes cleaned"
-
-# Initialize fresh database
-echo "🔄 Initializing fresh database..."
-if docker-compose -f docker-compose.deploy.yml exec -T backend python init_db.py; then
-    echo "✅ Database initialized successfully"
+if [ "$DB_EXISTS" = "1" ]; then
+    echo "✅ Database file exists (data preserved)"
 else
-    echo "❌ Database initialization failed"
-    exit 1
+    echo "🔄 Database not found - initializing..."
+    echo "   [i] This is expected on first deployment"
+    if docker-compose -f docker-compose.deploy.yml exec -T backend python init_db.py; then
+        echo "✅ Database initialized successfully"
+    else
+        echo "❌ Database initialization failed"
+        exit 1
+    fi
 fi
 
-# Step 13: Check admin user (should exist from init_db.py)
+# Step 11b: Check vector database (MOVED AFTER INGESTION)
 echo ""
-echo "1️⃣3️⃣ Verifying admin user..."
+echo "1️⃣1️⃣b Checking vector database (ChromaDB) status..."
+VECTOR_DB_PATH="/app/data/processed/chroma_db"
+# Will check after ingestion runs
+
+# Step 12: Check admin user and seed data
+echo ""
+echo "1️⃣2️⃣ Checking admin user..."
 ADMIN_EXISTS=$(docker-compose -f docker-compose.deploy.yml exec -T backend python -c "
 from app.core.database import SessionLocal
 from app.models.user import UserDB
@@ -359,26 +333,51 @@ except:
 if [ "$ADMIN_EXISTS" = "1" ]; then
     echo "✅ Admin user exists (admin@acme.com)"
 else
-    echo "❌ Admin user not created - check init_db.py"
+    echo "🔄 Admin user not found - creating via init_db.py..."
+    if docker-compose -f docker-compose.deploy.yml exec -T backend python init_db.py; then
+        echo "✅ Admin user created successfully"
+        echo "   Email: admin@acme.com"
+        echo "   Password: admin123"
+        ADMIN_EXISTS="1"
+    else
+        echo "❌ Failed to create admin user"
+        ADMIN_EXISTS="0"
+    fi
 fi
 
-# Step 14: Load ingestion data
+# Step 13: Load ingestion data
 echo ""
-echo "1️⃣4️⃣ Loading ingestion data and creating vector database..."
-if docker-compose -f docker-compose.deploy.yml exec -T backend python ingestion_script.py; then
-    echo "✅ Seed data and vector database created successfully"
+echo "1️⃣3️⃣ Loading ingestion data..."
+USERS_COUNT=$(docker-compose -f docker-compose.deploy.yml exec -T backend python -c "
+from app.core.database import SessionLocal
+from app.models.user import UserDB
+try:
+    session = SessionLocal()
+    count = session.query(UserDB).count()
+    print(count)
+except:
+    print('0')
+" 2>/dev/null || echo "0")
+
+if [ "$USERS_COUNT" -gt 1 ]; then
+    echo "✅ Seed data already loaded"
 else
-    echo "⚠️  Ingestion script had issues (vectors may still be created)"
+    echo "🔄 Loading seed data and creating vector database..."
+    if docker-compose -f docker-compose.deploy.yml exec -T backend python ingestion_script.py; then
+        echo "✅ Seed data and vector database created successfully"
+    else
+        echo "⚠️  Ingestion script had issues (this is often expected for Windows paths)"
+    fi
 fi
 
 # NOW check vector database after ingestion
 echo ""
-echo "1️⃣5️⃣ Checking vector database after ingestion..."
+echo "1️⃣3️⃣b Checking vector database after ingestion..."
 VECTOR_EXISTS=$(docker-compose -f docker-compose.deploy.yml exec -T backend sh -c "[ -d $VECTOR_DB_PATH ] && echo '1' || echo '0'" 2>/dev/null || echo "0")
 
-# Step 16: Final verification
+# Step 14: Final verification
 echo ""
-echo "1️⃣6️⃣ Final verification..."
+echo "1️⃣4️⃣ Final verification..."
 
 # Check if backend is healthy
 HEALTH_STATUS=$(curl -s http://localhost:8000/health 2>/dev/null | grep -o "healthy" || echo "error")
@@ -390,12 +389,892 @@ fi
 
 # Check container status
 echo ""
-echo "1️⃣7️⃣ Container status:"
+echo "1️⃣5️⃣ Container status:"
 docker-compose -f docker-compose.deploy.yml ps
 
-# Step 18: Verify bot is online by checking status endpoint
+# Step 16: Verify bot is online by checking status endpoint
 echo ""
-echo "1️⃣8️⃣ Verifying bot status..."
+echo "1️⃣6️⃣ Verifying bot status..."
+BOT_STATUS=$(curl -s http://localhost:8000/api/v1/status 2>/dev/null | grep -o '"status":"[^"]*"' | cut -d'"' -f4)
+BOT_BOT_STATUS=$(curl -s http://localhost:8000/api/v1/status 2>/dev/null | grep -o '"status":"[^"]*"' | tail -1 | cut -d'"' -f4)
+
+if [ "$BOT_BOT_STATUS" = "online" ]; then
+    echo "✅ Bot is ONLINE and ready to chat!"
+    CONFIG_OK="true"
+else
+    echo "⚠️  Bot status: $BOT_BOT_STATUS (check GOOGLE_API_KEY if offline)"
+    # Check if API key is in the .env
+    if grep -q "^GOOGLE_API_KEY=AIza" backend/.env 2>/dev/null; then
+        echo "   API Key appears to be set in .env"
+    else
+        echo "   ❌ API Key may not be properly configured"
+    fi
+    CONFIG_OK="false"
+fi
+
+# Cleanup
+docker logout
+
+echo ""
+echo "======================================"
+echo "✅ Deployment Complete!"
+echo "======================================"
+echo ""
+echo "📊 Deployment Summary:"
+echo "   Code Changes:        $([ "$REBUILD_NEEDED" = true ] && echo "YES - Images rebuilt" || echo "NO - Used cached images")"
+echo "   Database:            $([ "$DB_EXISTS" = "1" ] && echo "✅ Created & initialized" || echo "⚠️  Not found")"
+echo "   Vector Database:     $([ "$VECTOR_EXISTS" = "1" ] && echo "✅ Created" || echo "⚠️  Not created yet")"
+echo "   Admin User:          $([ "$ADMIN_EXISTS" = "1" ] && echo "✅ Exists" || echo "❌ Not seeded")"
+echo "   Backend Health:      $([ "$HEALTH_STATUS" = "healthy" ] && echo "✅ Healthy" || echo "⚠️  Starting")"
+echo ""
+echo "🌐 Access your application:"
+echo "   Frontend:  http://$DROPLET_IP"
+echo "   Backend:   http://$DROPLET_IP:8000"
+echo "   API Docs:  http://$DROPLET_IP:8000/docs"
+echo ""
+echo "🔐 Default Admin Credentials:"
+echo "   Email:    admin@acme.com"
+echo "   Password: admin123"
+echo ""
+echo "📋 View logs:"
+echo "   docker-compose -f docker-compose.deploy.yml logs -f"
+echo ""#!/bin/bash
+
+# Master Deployment Script for Digital Ocean Droplet
+# This handles all deployment, initialization, and setup
+# Usage: ./deploy.sh
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+echo "======================================"
+echo "🚀 Auto-Ops-AI Complete Deployment"
+echo "======================================"
+
+# Export environment variables
+export DOCKER_HUB_USERNAME="${DOCKER_HUB_USERNAME:-}"
+export DOCKER_HUB_PASSWORD="${DOCKER_HUB_PASSWORD:-}"
+export GOOGLE_API_KEY="${GOOGLE_API_KEY:-}"
+export DROPLET_IP=$(hostname -I | awk '{print $1}')
+
+if [ -z "$DOCKER_HUB_USERNAME" ]; then
+    echo "❌ Error: DOCKER_HUB_USERNAME not set"
+    exit 1
+fi
+
+if [ -z "$GOOGLE_API_KEY" ]; then
+    echo "⚠️  Warning: GOOGLE_API_KEY not set - bot will not function"
+    echo "   Please add GOOGLE_API_KEY secret to GitHub repository settings"
+    echo ""
+    echo "   Steps to fix:"
+    echo "   1. Go to: https://github.com/gimhanadeshan/auto-ops-ai"
+    echo "   2. Settings > Secrets and variables > Actions"
+    echo "   3. Click 'New repository secret'"
+    echo "   4. Name: GOOGLE_API_KEY"
+    echo "   5. Value: Your actual API key from https://makersuite.google.com/app/apikey"
+    echo "   6. Click 'Add secret'"
+    echo "   7. Push a commit to trigger deployment"
+fi
+
+echo "📍 Droplet IP: $DROPLET_IP"
+echo "🐳 Docker Hub User: $DOCKER_HUB_USERNAME"
+echo ""
+echo "⚠️  DATA PRESERVATION:"
+echo "   • Database is stored in 'backend-data' volume (persists across deployments)"
+echo "   • Logs are stored in 'logs' volume (persists across deployments)"
+echo "   • Your data will NOT be reset during redeployment"
+echo ""
+
+# Step 1: Ensure tools are installed
+echo ""
+echo "1️⃣  Checking Docker installation..."
+if ! command -v docker &> /dev/null; then
+    echo "❌ Docker not found. Installing..."
+    curl -fsSL https://get.docker.com -o get-docker.sh
+    sudo sh get-docker.sh
+    rm get-docker.sh
+fi
+
+if ! command -v docker-compose &> /dev/null; then
+    echo "❌ docker-compose not found. Installing..."
+    sudo curl -L "https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+    sudo chmod +x /usr/local/bin/docker-compose
+fi
+
+echo "✅ Docker tools ready"
+
+# Step 2: Prepare application directory
+echo ""
+echo "2️⃣  Preparing /app directory..."
+mkdir -p /app
+cd /app
+
+# Step 3: Clone/update repository (with retry)
+echo ""
+echo "3️⃣  Cloning repository..."
+REBUILD_NEEDED=false
+DOCKERFILE_CHANGED=false
+GIT_RETRY=0
+GIT_MAX_RETRIES=2
+
+while [ $GIT_RETRY -lt $GIT_MAX_RETRIES ]; do
+    if [ ! -d .git ]; then
+        if git clone https://github.com/gimhanadeshan/auto-ops-ai.git . 2>/dev/null; then
+            REBUILD_NEEDED=true
+            break
+        fi
+    else
+        # Check if there are new changes
+        PREV_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "")
+        if git fetch origin main 2>/dev/null; then
+            LOCAL=$(git rev-parse HEAD)
+            REMOTE=$(git rev-parse origin/main)
+            
+            if [ "$LOCAL" != "$REMOTE" ]; then
+                echo "📝 Code changes detected"
+                # Check if Dockerfile was changed
+                if git diff $LOCAL $REMOTE --name-only | grep -q "Dockerfile"; then
+                    echo "⚠️  Dockerfile changed - will rebuild all images"
+                    DOCKERFILE_CHANGED=true
+                    REBUILD_NEEDED=true
+                else
+                    echo "📝 Other changes detected - will rebuild images"
+                    REBUILD_NEEDED=true
+                fi
+                git checkout -f origin/main
+            else
+                echo "✓ Code is up-to-date - using cached images"
+                REBUILD_NEEDED=false
+            fi
+            break
+        fi
+    fi
+    
+    GIT_RETRY=$((GIT_RETRY + 1))
+    if [ $GIT_RETRY -lt $GIT_MAX_RETRIES ]; then
+        echo "⚠️  Git operation failed (attempt $GIT_RETRY/$GIT_MAX_RETRIES) - retrying in 5 seconds..."
+        sleep 5
+    else
+        echo "❌ Git operation failed after $GIT_MAX_RETRIES attempts"
+        exit 1
+    fi
+done
+
+echo "✅ Repository updated"
+
+# Step 4: Create environment files
+echo ""
+echo "4️⃣  Creating environment configuration files..."
+
+# Create backend .env
+mkdir -p backend
+cat > backend/.env << EOF
+# Auto-generated by deploy.sh
+LLM_PROVIDER=gemini
+EMBEDDING_PROVIDER=gemini
+GOOGLE_API_KEY=${GOOGLE_API_KEY}
+GEMINI_MODEL=models/gemini-2.5-flash
+GEMINI_TEMPERATURE=0.9
+EMBEDDING_MODEL=models/embedding-001
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-4
+DATABASE_URL=sqlite:///./data/processed/auto_ops.db
+SECRET_KEY=auto-ops-ai-secret-key-change-in-production
+ENVIRONMENT=production
+EOF
+
+# Validate GOOGLE_API_KEY was written correctly
+if grep -q "^GOOGLE_API_KEY=$" backend/.env; then
+    echo "❌ ERROR: GOOGLE_API_KEY is empty in production .env"
+    echo "   Bot will NOT function in production"
+    echo "   Please verify GitHub Secret is set and deployment includes GOOGLE_API_KEY"
+    exit 1
+elif grep -q "^GOOGLE_API_KEY=" backend/.env; then
+    echo "✅ Backend .env created with API key"
+else
+    echo "⚠️  Warning: Could not verify GOOGLE_API_KEY in .env"
+fi
+
+# Create frontend .env
+mkdir -p frontend
+cat > frontend/.env << EOF
+# Auto-generated by deploy.sh
+VITE_API_BASE_URL=http://${DROPLET_IP}:8000/api/v1
+EOF
+echo "✅ Frontend .env created"
+
+# Step 5: Login to Docker Hub (with retry)
+echo ""
+echo "5️⃣  Logging in to Docker Hub..."
+MAX_RETRIES=2
+RETRY_COUNT=0
+
+while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+    if echo "$DOCKER_HUB_PASSWORD" | docker login -u "$DOCKER_HUB_USERNAME" --password-stdin 2>/dev/null; then
+        echo "✅ Docker Hub login successful"
+        break
+    else
+        RETRY_COUNT=$((RETRY_COUNT + 1))
+        if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+            echo "⚠️  Docker Hub login failed (attempt $RETRY_COUNT/$MAX_RETRIES), retrying in 3 seconds..."
+            sleep 3
+        else
+            echo "⚠️  Docker Hub login failed - will build from source"
+            REBUILD_NEEDED=true
+        fi
+    fi
+done
+
+# Step 6: Pull latest images or build if changes detected
+echo ""
+echo "6️⃣  Processing Docker images..."
+
+if [ "$REBUILD_NEEDED" = true ]; then
+    echo "🔨 Building new images from source..."
+    if docker-compose -f docker-compose.deploy.yml build --no-cache 2>/dev/null; then
+        echo "✅ Images built successfully"
+    else
+        echo "❌ Build failed - checking if images exist locally..."
+        BACKEND_IMAGE=$(docker images | grep auto-ops-ai-backend | head -1 | awk '{print $3}')
+        FRONTEND_IMAGE=$(docker images | grep auto-ops-ai-frontend | head -1 | awk '{print $3}')
+        if [ -n "$BACKEND_IMAGE" ] && [ -n "$FRONTEND_IMAGE" ]; then
+            echo "✅ Using existing local images"
+        else
+            echo "❌ No images available - deployment cannot continue"
+            exit 1
+        fi
+    fi
+else
+    echo "📦 Checking for pre-built images..."
+    
+    # Try to pull with retry logic
+    PULL_RETRY=0
+    while [ $PULL_RETRY -lt 2 ]; do
+        if docker pull $DOCKER_HUB_USERNAME/auto-ops-ai-backend:latest 2>/dev/null && \
+           docker pull $DOCKER_HUB_USERNAME/auto-ops-ai-frontend:latest 2>/dev/null; then
+            echo "✅ Images pulled successfully"
+            break
+        else
+            PULL_RETRY=$((PULL_RETRY + 1))
+            if [ $PULL_RETRY -lt 2 ]; then
+                echo "⚠️  Pull failed (attempt $PULL_RETRY/2) - checking for local images..."
+            else
+                echo "⚠️  Cannot pull from Docker Hub - using local images if available"
+            fi
+        fi
+    done
+    
+    # Check if local images exist
+    BACKEND_IMAGE=$(docker images | grep auto-ops-ai-backend | head -1 | awk '{print $3}')
+    if [ -z "$BACKEND_IMAGE" ]; then
+        echo "⚠️  Local images not found - will build from source"
+        if docker-compose -f docker-compose.deploy.yml build --no-cache 2>/dev/null; then
+            echo "✅ Images built successfully"
+        else
+            echo "❌ Build failed and no images available"
+            exit 1
+        fi
+    fi
+fi
+
+# Step 7: Stop old containers
+echo ""
+echo "7️⃣  Stopping old containers..."
+docker-compose -f docker-compose.deploy.yml down || true
+echo "✅ Old containers stopped"
+
+# Step 8: Start new containers
+echo ""
+echo "8️⃣  Starting new containers..."
+echo "📍 API URL: http://${DROPLET_IP}:8000/api/v1"
+VITE_API_BASE_URL="http://${DROPLET_IP}:8000/api/v1" docker-compose -f docker-compose.deploy.yml up -d --build
+echo "✅ Containers started"
+
+# Step 9: Open firewall ports
+echo ""
+echo "9️⃣  Configuring firewall..."
+ufw allow 8000/tcp || true
+ufw allow 80/tcp || true
+ufw allow 443/tcp || true
+echo "✅ Firewall configured"
+
+# Step 10: Wait for services with health check
+echo ""
+echo "🔟 Waiting for backend to be ready..."
+HEALTH_WAIT=0
+MAX_WAIT=30
+while [ $HEALTH_WAIT -lt $MAX_WAIT ]; do
+    if curl -s http://localhost:8000/health > /dev/null 2>&1; then
+        echo "✅ Backend is ready!"
+        break
+    fi
+    HEALTH_WAIT=$((HEALTH_WAIT + 5))
+    if [ $HEALTH_WAIT -lt $MAX_WAIT ]; then
+        echo "  ⏳ Waiting... ($HEALTH_WAIT/$MAX_WAIT seconds)"
+        sleep 5
+    fi
+done
+
+if [ $HEALTH_WAIT -ge $MAX_WAIT ]; then
+    echo "⚠️  Backend didn't respond to health check (normal for first deployment)"
+fi
+
+# Step 11: Initialize database (skip if already exists)
+echo ""
+echo "1️⃣1️⃣ Checking database status..."
+# Step 10: Check database and initialize if needed
+echo ""
+echo "1️⃣0️⃣ Checking database persistence..."
+
+# Show current volume status
+echo "📁 Database volumes in use:"
+docker volume ls | grep backend-data || echo "   No volumes found yet"
+
+DB_PATH="/app/data/processed/auto_ops.db"
+
+# Check if database exists inside the container
+DB_EXISTS=$(docker-compose -f docker-compose.deploy.yml exec -T backend sh -c "[ -f $DB_PATH ] && echo '1' || echo '0'" 2>/dev/null || echo "0")
+
+if [ "$DB_EXISTS" = "1" ]; then
+    echo "✅ Database file exists (data preserved)"
+else
+    echo "🔄 Database not found - initializing..."
+    echo "   [i] This is expected on first deployment"
+    if docker-compose -f docker-compose.deploy.yml exec -T backend python init_db.py; then
+        echo "✅ Database initialized successfully"
+    else
+        echo "❌ Database initialization failed"
+        exit 1
+    fi
+fi
+
+# Step 11b: Check vector database (MOVED AFTER INGESTION)
+echo ""
+echo "1️⃣1️⃣b Checking vector database (ChromaDB) status..."
+VECTOR_DB_PATH="/app/data/processed/chroma_db"
+# Will check after ingestion runs
+
+# Step 12: Check admin user and seed data
+echo ""
+echo "1️⃣2️⃣ Checking admin user..."
+ADMIN_EXISTS=$(docker-compose -f docker-compose.deploy.yml exec -T backend python -c "
+from app.core.database import SessionLocal
+from app.models.user import UserDB
+try:
+    session = SessionLocal()
+    admin = session.query(UserDB).filter(UserDB.email == 'admin@acme.com').first()
+    print('1' if admin else '0')
+except:
+    print('0')
+" 2>/dev/null || echo "0")
+
+if [ "$ADMIN_EXISTS" = "1" ]; then
+    echo "✅ Admin user exists (admin@acme.com)"
+else
+    echo "🔄 Admin user not found - creating via init_db.py..."
+    if docker-compose -f docker-compose.deploy.yml exec -T backend python init_db.py; then
+        echo "✅ Admin user created successfully"
+        echo "   Email: admin@acme.com"
+        echo "   Password: admin123"
+        ADMIN_EXISTS="1"
+    else
+        echo "❌ Failed to create admin user"
+        ADMIN_EXISTS="0"
+    fi
+fi
+
+# Step 13: Load ingestion data
+echo ""
+echo "1️⃣3️⃣ Loading ingestion data..."
+USERS_COUNT=$(docker-compose -f docker-compose.deploy.yml exec -T backend python -c "
+from app.core.database import SessionLocal
+from app.models.user import UserDB
+try:
+    session = SessionLocal()
+    count = session.query(UserDB).count()
+    print(count)
+except:
+    print('0')
+" 2>/dev/null || echo "0")
+
+if [ "$USERS_COUNT" -gt 1 ]; then
+    echo "✅ Seed data already loaded"
+else
+    echo "🔄 Loading seed data and creating vector database..."
+    if docker-compose -f docker-compose.deploy.yml exec -T backend python ingestion_script.py; then
+        echo "✅ Seed data and vector database created successfully"
+    else
+        echo "⚠️  Ingestion script had issues (this is often expected for Windows paths)"
+    fi
+fi
+
+# NOW check vector database after ingestion
+echo ""
+echo "1️⃣3️⃣b Checking vector database after ingestion..."
+VECTOR_EXISTS=$(docker-compose -f docker-compose.deploy.yml exec -T backend sh -c "[ -d $VECTOR_DB_PATH ] && echo '1' || echo '0'" 2>/dev/null || echo "0")
+
+# Step 14: Final verification
+echo ""
+echo "1️⃣4️⃣ Final verification..."
+
+# Check if backend is healthy
+HEALTH_STATUS=$(curl -s http://localhost:8000/health 2>/dev/null | grep -o "healthy" || echo "error")
+if [ "$HEALTH_STATUS" = "healthy" ]; then
+    echo "✅ Backend health check passed"
+else
+    echo "⚠️  Backend not responding yet (still starting)"
+fi
+
+# Check container status
+echo ""
+echo "1️⃣5️⃣ Container status:"
+docker-compose -f docker-compose.deploy.yml ps
+
+# Step 16: Verify bot is online by checking status endpoint
+echo ""
+echo "1️⃣6️⃣ Verifying bot status..."
+BOT_STATUS=$(curl -s http://localhost:8000/api/v1/status 2>/dev/null | grep -o '"status":"[^"]*"' | cut -d'"' -f4)
+BOT_BOT_STATUS=$(curl -s http://localhost:8000/api/v1/status 2>/dev/null | grep -o '"status":"[^"]*"' | tail -1 | cut -d'"' -f4)
+
+if [ "$BOT_BOT_STATUS" = "online" ]; then
+    echo "✅ Bot is ONLINE and ready to chat!"
+    CONFIG_OK="true"
+else
+    echo "⚠️  Bot status: $BOT_BOT_STATUS (check GOOGLE_API_KEY if offline)"
+    # Check if API key is in the .env
+    if grep -q "^GOOGLE_API_KEY=AIza" backend/.env 2>/dev/null; then
+        echo "   API Key appears to be set in .env"
+    else
+        echo "   ❌ API Key may not be properly configured"
+    fi
+    CONFIG_OK="false"
+fi
+
+# Cleanup
+docker logout
+
+echo ""
+echo "======================================"
+echo "✅ Deployment Complete!"
+echo "======================================"
+echo ""
+echo "📊 Deployment Summary:"
+echo "   Code Changes:        $([ "$REBUILD_NEEDED" = true ] && echo "YES - Images rebuilt" || echo "NO - Used cached images")"
+echo "   Database:            $([ "$DB_EXISTS" = "1" ] && echo "✅ Created & initialized" || echo "⚠️  Not found")"
+echo "   Vector Database:     $([ "$VECTOR_EXISTS" = "1" ] && echo "✅ Created" || echo "⚠️  Not created yet")"
+echo "   Admin User:          $([ "$ADMIN_EXISTS" = "1" ] && echo "✅ Exists" || echo "❌ Not seeded")"
+echo "   Backend Health:      $([ "$HEALTH_STATUS" = "healthy" ] && echo "✅ Healthy" || echo "⚠️  Starting")"
+echo ""
+echo "🌐 Access your application:"
+echo "   Frontend:  http://$DROPLET_IP"
+echo "   Backend:   http://$DROPLET_IP:8000"
+echo "   API Docs:  http://$DROPLET_IP:8000/docs"
+echo ""
+echo "🔐 Default Admin Credentials:"
+echo "   Email:    admin@acme.com"
+echo "   Password: admin123"
+echo ""
+echo "📋 View logs:"
+echo "   docker-compose -f docker-compose.deploy.yml logs -f"
+echo ""#!/bin/bash
+
+# Master Deployment Script for Digital Ocean Droplet
+# This handles all deployment, initialization, and setup
+# Usage: ./deploy.sh
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+echo "======================================"
+echo "🚀 Auto-Ops-AI Complete Deployment"
+echo "======================================"
+
+# Export environment variables
+export DOCKER_HUB_USERNAME="${DOCKER_HUB_USERNAME:-}"
+export DOCKER_HUB_PASSWORD="${DOCKER_HUB_PASSWORD:-}"
+export GOOGLE_API_KEY="${GOOGLE_API_KEY:-}"
+export DROPLET_IP=$(hostname -I | awk '{print $1}')
+
+if [ -z "$DOCKER_HUB_USERNAME" ]; then
+    echo "❌ Error: DOCKER_HUB_USERNAME not set"
+    exit 1
+fi
+
+if [ -z "$GOOGLE_API_KEY" ]; then
+    echo "⚠️  Warning: GOOGLE_API_KEY not set - bot will not function"
+    echo "   Please add GOOGLE_API_KEY secret to GitHub repository settings"
+    echo ""
+    echo "   Steps to fix:"
+    echo "   1. Go to: https://github.com/gimhanadeshan/auto-ops-ai"
+    echo "   2. Settings > Secrets and variables > Actions"
+    echo "   3. Click 'New repository secret'"
+    echo "   4. Name: GOOGLE_API_KEY"
+    echo "   5. Value: Your actual API key from https://makersuite.google.com/app/apikey"
+    echo "   6. Click 'Add secret'"
+    echo "   7. Push a commit to trigger deployment"
+fi
+
+echo "📍 Droplet IP: $DROPLET_IP"
+echo "🐳 Docker Hub User: $DOCKER_HUB_USERNAME"
+echo ""
+echo "⚠️  DATA PRESERVATION:"
+echo "   • Database is stored in 'backend-data' volume (persists across deployments)"
+echo "   • Logs are stored in 'logs' volume (persists across deployments)"
+echo "   • Your data will NOT be reset during redeployment"
+echo ""
+
+# Step 1: Ensure tools are installed
+echo ""
+echo "1️⃣  Checking Docker installation..."
+if ! command -v docker &> /dev/null; then
+    echo "❌ Docker not found. Installing..."
+    curl -fsSL https://get.docker.com -o get-docker.sh
+    sudo sh get-docker.sh
+    rm get-docker.sh
+fi
+
+if ! command -v docker-compose &> /dev/null; then
+    echo "❌ docker-compose not found. Installing..."
+    sudo curl -L "https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+    sudo chmod +x /usr/local/bin/docker-compose
+fi
+
+echo "✅ Docker tools ready"
+
+# Step 2: Prepare application directory
+echo ""
+echo "2️⃣  Preparing /app directory..."
+mkdir -p /app
+cd /app
+
+# Step 3: Clone/update repository (with retry)
+echo ""
+echo "3️⃣  Cloning repository..."
+REBUILD_NEEDED=false
+DOCKERFILE_CHANGED=false
+GIT_RETRY=0
+GIT_MAX_RETRIES=2
+
+while [ $GIT_RETRY -lt $GIT_MAX_RETRIES ]; do
+    if [ ! -d .git ]; then
+        if git clone https://github.com/gimhanadeshan/auto-ops-ai.git . 2>/dev/null; then
+            REBUILD_NEEDED=true
+            break
+        fi
+    else
+        # Check if there are new changes
+        PREV_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "")
+        if git fetch origin main 2>/dev/null; then
+            LOCAL=$(git rev-parse HEAD)
+            REMOTE=$(git rev-parse origin/main)
+            
+            if [ "$LOCAL" != "$REMOTE" ]; then
+                echo "📝 Code changes detected"
+                # Check if Dockerfile was changed
+                if git diff $LOCAL $REMOTE --name-only | grep -q "Dockerfile"; then
+                    echo "⚠️  Dockerfile changed - will rebuild all images"
+                    DOCKERFILE_CHANGED=true
+                    REBUILD_NEEDED=true
+                else
+                    echo "📝 Other changes detected - will rebuild images"
+                    REBUILD_NEEDED=true
+                fi
+                git checkout -f origin/main
+            else
+                echo "✓ Code is up-to-date - using cached images"
+                REBUILD_NEEDED=false
+            fi
+            break
+        fi
+    fi
+    
+    GIT_RETRY=$((GIT_RETRY + 1))
+    if [ $GIT_RETRY -lt $GIT_MAX_RETRIES ]; then
+        echo "⚠️  Git operation failed (attempt $GIT_RETRY/$GIT_MAX_RETRIES) - retrying in 5 seconds..."
+        sleep 5
+    else
+        echo "❌ Git operation failed after $GIT_MAX_RETRIES attempts"
+        exit 1
+    fi
+done
+
+echo "✅ Repository updated"
+
+# Step 4: Create environment files
+echo ""
+echo "4️⃣  Creating environment configuration files..."
+
+# Create backend .env
+mkdir -p backend
+cat > backend/.env << EOF
+# Auto-generated by deploy.sh
+LLM_PROVIDER=gemini
+EMBEDDING_PROVIDER=gemini
+GOOGLE_API_KEY=${GOOGLE_API_KEY}
+GEMINI_MODEL=models/gemini-2.5-flash
+GEMINI_TEMPERATURE=0.9
+EMBEDDING_MODEL=models/embedding-001
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-4
+DATABASE_URL=sqlite:///./data/processed/auto_ops.db
+SECRET_KEY=auto-ops-ai-secret-key-change-in-production
+ENVIRONMENT=production
+EOF
+
+# Validate GOOGLE_API_KEY was written correctly
+if grep -q "^GOOGLE_API_KEY=$" backend/.env; then
+    echo "❌ ERROR: GOOGLE_API_KEY is empty in production .env"
+    echo "   Bot will NOT function in production"
+    echo "   Please verify GitHub Secret is set and deployment includes GOOGLE_API_KEY"
+    exit 1
+elif grep -q "^GOOGLE_API_KEY=" backend/.env; then
+    echo "✅ Backend .env created with API key"
+else
+    echo "⚠️  Warning: Could not verify GOOGLE_API_KEY in .env"
+fi
+
+# Create frontend .env
+mkdir -p frontend
+cat > frontend/.env << EOF
+# Auto-generated by deploy.sh
+VITE_API_BASE_URL=http://${DROPLET_IP}:8000/api/v1
+EOF
+echo "✅ Frontend .env created"
+
+# Step 5: Login to Docker Hub (with retry)
+echo ""
+echo "5️⃣  Logging in to Docker Hub..."
+MAX_RETRIES=2
+RETRY_COUNT=0
+
+while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+    if echo "$DOCKER_HUB_PASSWORD" | docker login -u "$DOCKER_HUB_USERNAME" --password-stdin 2>/dev/null; then
+        echo "✅ Docker Hub login successful"
+        break
+    else
+        RETRY_COUNT=$((RETRY_COUNT + 1))
+        if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+            echo "⚠️  Docker Hub login failed (attempt $RETRY_COUNT/$MAX_RETRIES), retrying in 3 seconds..."
+            sleep 3
+        else
+            echo "⚠️  Docker Hub login failed - will build from source"
+            REBUILD_NEEDED=true
+        fi
+    fi
+done
+
+# Step 6: Pull latest images or build if changes detected
+echo ""
+echo "6️⃣  Processing Docker images..."
+
+if [ "$REBUILD_NEEDED" = true ]; then
+    echo "🔨 Building new images from source..."
+    if docker-compose -f docker-compose.deploy.yml build --no-cache 2>/dev/null; then
+        echo "✅ Images built successfully"
+    else
+        echo "❌ Build failed - checking if images exist locally..."
+        BACKEND_IMAGE=$(docker images | grep auto-ops-ai-backend | head -1 | awk '{print $3}')
+        FRONTEND_IMAGE=$(docker images | grep auto-ops-ai-frontend | head -1 | awk '{print $3}')
+        if [ -n "$BACKEND_IMAGE" ] && [ -n "$FRONTEND_IMAGE" ]; then
+            echo "✅ Using existing local images"
+        else
+            echo "❌ No images available - deployment cannot continue"
+            exit 1
+        fi
+    fi
+else
+    echo "📦 Checking for pre-built images..."
+    
+    # Try to pull with retry logic
+    PULL_RETRY=0
+    while [ $PULL_RETRY -lt 2 ]; do
+        if docker pull $DOCKER_HUB_USERNAME/auto-ops-ai-backend:latest 2>/dev/null && \
+           docker pull $DOCKER_HUB_USERNAME/auto-ops-ai-frontend:latest 2>/dev/null; then
+            echo "✅ Images pulled successfully"
+            break
+        else
+            PULL_RETRY=$((PULL_RETRY + 1))
+            if [ $PULL_RETRY -lt 2 ]; then
+                echo "⚠️  Pull failed (attempt $PULL_RETRY/2) - checking for local images..."
+            else
+                echo "⚠️  Cannot pull from Docker Hub - using local images if available"
+            fi
+        fi
+    done
+    
+    # Check if local images exist
+    BACKEND_IMAGE=$(docker images | grep auto-ops-ai-backend | head -1 | awk '{print $3}')
+    if [ -z "$BACKEND_IMAGE" ]; then
+        echo "⚠️  Local images not found - will build from source"
+        if docker-compose -f docker-compose.deploy.yml build --no-cache 2>/dev/null; then
+            echo "✅ Images built successfully"
+        else
+            echo "❌ Build failed and no images available"
+            exit 1
+        fi
+    fi
+fi
+
+# Step 7: Stop old containers
+echo ""
+echo "7️⃣  Stopping old containers..."
+docker-compose -f docker-compose.deploy.yml down || true
+echo "✅ Old containers stopped"
+
+# Step 8: Start new containers
+echo ""
+echo "8️⃣  Starting new containers..."
+echo "📍 API URL: http://${DROPLET_IP}:8000/api/v1"
+VITE_API_BASE_URL="http://${DROPLET_IP}:8000/api/v1" docker-compose -f docker-compose.deploy.yml up -d --build
+echo "✅ Containers started"
+
+# Step 9: Open firewall ports
+echo ""
+echo "9️⃣  Configuring firewall..."
+ufw allow 8000/tcp || true
+ufw allow 80/tcp || true
+ufw allow 443/tcp || true
+echo "✅ Firewall configured"
+
+# Step 10: Wait for services with health check
+echo ""
+echo "🔟 Waiting for backend to be ready..."
+HEALTH_WAIT=0
+MAX_WAIT=30
+while [ $HEALTH_WAIT -lt $MAX_WAIT ]; do
+    if curl -s http://localhost:8000/health > /dev/null 2>&1; then
+        echo "✅ Backend is ready!"
+        break
+    fi
+    HEALTH_WAIT=$((HEALTH_WAIT + 5))
+    if [ $HEALTH_WAIT -lt $MAX_WAIT ]; then
+        echo "  ⏳ Waiting... ($HEALTH_WAIT/$MAX_WAIT seconds)"
+        sleep 5
+    fi
+done
+
+if [ $HEALTH_WAIT -ge $MAX_WAIT ]; then
+    echo "⚠️  Backend didn't respond to health check (normal for first deployment)"
+fi
+
+# Step 11: Initialize database (skip if already exists)
+echo ""
+echo "1️⃣1️⃣ Checking database status..."
+# Step 10: Check database and initialize if needed
+echo ""
+echo "1️⃣0️⃣ Checking database persistence..."
+
+# Show current volume status
+echo "📁 Database volumes in use:"
+docker volume ls | grep backend-data || echo "   No volumes found yet"
+
+DB_PATH="/app/data/processed/auto_ops.db"
+
+# Check if database exists inside the container
+DB_EXISTS=$(docker-compose -f docker-compose.deploy.yml exec -T backend sh -c "[ -f $DB_PATH ] && echo '1' || echo '0'" 2>/dev/null || echo "0")
+
+if [ "$DB_EXISTS" = "1" ]; then
+    echo "✅ Database file exists (data preserved)"
+else
+    echo "🔄 Database not found - initializing..."
+    echo "   [i] This is expected on first deployment"
+    if docker-compose -f docker-compose.deploy.yml exec -T backend python init_db.py; then
+        echo "✅ Database initialized successfully"
+    else
+        echo "❌ Database initialization failed"
+        exit 1
+    fi
+fi
+
+# Step 11b: Check vector database (MOVED AFTER INGESTION)
+echo ""
+echo "1️⃣1️⃣b Checking vector database (ChromaDB) status..."
+VECTOR_DB_PATH="/app/data/processed/chroma_db"
+# Will check after ingestion runs
+
+# Step 12: Check admin user and seed data
+echo ""
+echo "1️⃣2️⃣ Checking admin user..."
+ADMIN_EXISTS=$(docker-compose -f docker-compose.deploy.yml exec -T backend python -c "
+from app.core.database import SessionLocal
+from app.models.user import UserDB
+try:
+    session = SessionLocal()
+    admin = session.query(UserDB).filter(UserDB.email == 'admin@acme.com').first()
+    print('1' if admin else '0')
+except:
+    print('0')
+" 2>/dev/null || echo "0")
+
+if [ "$ADMIN_EXISTS" = "1" ]; then
+    echo "✅ Admin user exists (admin@acme.com)"
+else
+    echo "🔄 Admin user not found - creating via init_db.py..."
+    if docker-compose -f docker-compose.deploy.yml exec -T backend python init_db.py; then
+        echo "✅ Admin user created successfully"
+        echo "   Email: admin@acme.com"
+        echo "   Password: admin123"
+        ADMIN_EXISTS="1"
+    else
+        echo "❌ Failed to create admin user"
+        ADMIN_EXISTS="0"
+    fi
+fi
+
+# Step 13: Load ingestion data
+echo ""
+echo "1️⃣3️⃣ Loading ingestion data..."
+USERS_COUNT=$(docker-compose -f docker-compose.deploy.yml exec -T backend python -c "
+from app.core.database import SessionLocal
+from app.models.user import UserDB
+try:
+    session = SessionLocal()
+    count = session.query(UserDB).count()
+    print(count)
+except:
+    print('0')
+" 2>/dev/null || echo "0")
+
+if [ "$USERS_COUNT" -gt 1 ]; then
+    echo "✅ Seed data already loaded"
+else
+    echo "🔄 Loading seed data and creating vector database..."
+    if docker-compose -f docker-compose.deploy.yml exec -T backend python ingestion_script.py; then
+        echo "✅ Seed data and vector database created successfully"
+    else
+        echo "⚠️  Ingestion script had issues (this is often expected for Windows paths)"
+    fi
+fi
+
+# NOW check vector database after ingestion
+echo ""
+echo "1️⃣3️⃣b Checking vector database after ingestion..."
+VECTOR_EXISTS=$(docker-compose -f docker-compose.deploy.yml exec -T backend sh -c "[ -d $VECTOR_DB_PATH ] && echo '1' || echo '0'" 2>/dev/null || echo "0")
+
+# Step 14: Final verification
+echo ""
+echo "1️⃣4️⃣ Final verification..."
+
+# Check if backend is healthy
+HEALTH_STATUS=$(curl -s http://localhost:8000/health 2>/dev/null | grep -o "healthy" || echo "error")
+if [ "$HEALTH_STATUS" = "healthy" ]; then
+    echo "✅ Backend health check passed"
+else
+    echo "⚠️  Backend not responding yet (still starting)"
+fi
+
+# Check container status
+echo ""
+echo "1️⃣5️⃣ Container status:"
+docker-compose -f docker-compose.deploy.yml ps
+
+# Step 16: Verify bot is online by checking status endpoint
+echo ""
+echo "1️⃣6️⃣ Verifying bot status..."
 BOT_STATUS=$(curl -s http://localhost:8000/api/v1/status 2>/dev/null | grep -o '"status":"[^"]*"' | cut -d'"' -f4)
 BOT_BOT_STATUS=$(curl -s http://localhost:8000/api/v1/status 2>/dev/null | grep -o '"status":"[^"]*"' | tail -1 | cut -d'"' -f4)
 
