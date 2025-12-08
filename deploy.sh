@@ -248,7 +248,8 @@ echo "✅ Old containers stopped"
 # Step 8: Start new containers
 echo ""
 echo "8️⃣  Starting new containers..."
-docker-compose -f docker-compose.deploy.yml up -d
+echo "📍 API URL: http://${DROPLET_IP}:8000/api/v1"
+VITE_API_BASE_URL="http://${DROPLET_IP}:8000/api/v1" docker-compose -f docker-compose.deploy.yml up -d --build
 echo "✅ Containers started"
 
 # Step 9: Open firewall ports
