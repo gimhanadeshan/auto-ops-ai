@@ -65,4 +65,15 @@ class SLAService:
         return round(max(0.5, predicted_hours), 1)
 
 # Lazy initialization function
+def get_or_initialize_sla_service():
+    """
+    Lazily initialize and return SLA service instance.
+    Returns None if initialization fails (e.g., ML models missing).
+    """
+    try:
+        return SLAService()
+    except Exception as e:
+        print(f"Error initializing SLA service: {e}")
+        return None
+
 sla_service = None
