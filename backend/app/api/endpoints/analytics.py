@@ -7,21 +7,7 @@ from datetime import datetime, timedelta
 from app.core.database import get_db
 from app.models.ticket import TicketDB
 
-# Import with lazy loading - don't instantiate at import time
-sla_service = None
-
-def get_sla_service():
-    """Lazily initialize SLA service on first use"""
-    global sla_service
-    if sla_service is None:
-        try:
-            from app.services.sla_service import SLAService
-            sla_service = SLAService()
-        except Exception as e:
-            logging.warning(f"SLA service unavailable (ML models missing?): {e}")
-            sla_service = False  # Mark as explicitly unavailable
-    return sla_service if sla_service else None
-
+from app.services.sla_service import get_sla_service
 # Define the router
 router = APIRouter(tags=["Analytics"])
 
