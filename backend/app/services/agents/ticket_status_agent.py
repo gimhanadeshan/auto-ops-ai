@@ -82,7 +82,14 @@ class TicketStatusAgent:
             'frustrated', 'annoyed', 'angry', 'ridiculous',
             'waste of time', 'useless', 'terrible', 'awful',
             'nothing works', 'give up', 'escalate', 'manager',
-            'human', 'real person', 'speak to someone'
+            'human', 'real person', 'speak to someone',
+            # Urgency signals
+            'no time', 'have no time', 'urgent', 'emergency', 'asap',
+            'meeting in', 'afraid', 'worried', 'cant wait', "can't wait",
+            'please listen', 'please help', 'need help now',
+            # User giving up on self-service
+            'assign a human', 'talk to human', 'need human',
+            'i cant', "i can't", 'not able to', 'unable to'
         ]
     
     def analyze_conversation_status(
@@ -157,12 +164,12 @@ class TicketStatusAgent:
                 result["sla_warning"] = True
                 logger.warning(f"[STATUS-AGENT] SLA warning: Ticket open for {time_elapsed}")
         
-        # Check for escalation needs
+        # Check for escalation needs (lowered threshold for faster response)
         frustration_count = sum(1 for kw in self.frustration_keywords if kw in recent_text)
-        if frustration_count >= 2:
+        if frustration_count >= 1:  # Even 1 signal is enough for escalation
             result["needs_escalation"] = True
-            result["reason"] += " | User showing frustration signals"
-            logger.info(f"[STATUS-AGENT] Escalation recommended: {frustration_count} frustration signals detected")
+            result["reason"] += " | User showing frustration/urgency signals"
+            logger.info(f"[STATUS-AGENT] Escalation recommended: {frustration_count} frustration/urgency signals detected")
         
         if result["should_update"]:
             logger.info(f"[STATUS-AGENT] Status change: {current_status} -> {result['recommended_status']} ({result['reason']})")

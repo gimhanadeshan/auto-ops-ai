@@ -367,6 +367,8 @@ def create_user(
         hashed_password=get_password_hash(user_data.password),
         role=user_data.role.value,
         department=user_data.department,
+        specialization=user_data.specialization,
+        current_workload=0,
         is_active=True
     )
     
@@ -447,6 +449,10 @@ def update_user(
     if user_data.department != user.department:
         changes.append(f"Department: {user.department} → {user_data.department}")
         user.department = user_data.department
+    
+    if user_data.specialization != user.specialization:
+        changes.append(f"Specialization updated")
+        user.specialization = user_data.specialization
     
     db.commit()
     db.refresh(user)

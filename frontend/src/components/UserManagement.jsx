@@ -18,6 +18,7 @@ import userService from '../services/userService';
 import { usePermissions } from '../hooks/usePermissions';
 import PermissionGate from './PermissionGate';
 import { PERMISSIONS, getRoleDisplayInfo, canManageUser } from '../utils/permissionUtils';
+import { AGENT_SPECIALIZATIONS } from '../config/constants';
 import '../styles/components/UserManagement.css';
 
 const ROLES = [
@@ -52,7 +53,8 @@ function UserManagement() {
     email: '',
     name: '',
     password: '',
-    role: 'staff'
+    role: 'staff',
+    specialization: [] // For support agents
   });
   const [creatingUser, setCreatingUser] = useState(false);
   
@@ -69,7 +71,8 @@ function UserManagement() {
     email: '',
     name: '',
     password: '',
-    role: 'staff'
+    role: 'staff',
+    specialization: [] // For support agents
   });
   const [editingUserId, setEditingUserId] = useState(null);
   const [editingUserLoading, setEditingUserLoading] = useState(false);
@@ -159,7 +162,8 @@ function UserManagement() {
         email: '',
         name: '',
         password: '',
-        role: 'staff'
+        role: 'staff',
+        specialization: []
       });
       fetchUsers();
       setTimeout(() => setSuccessMessage(''), 3000);
@@ -191,7 +195,8 @@ function UserManagement() {
       email: user.email,
       name: user.name,
       password: '', // Password optional for edits
-      role: user.role
+      role: user.role,
+      specialization: user.specialization || []
     });
     setShowEditModal(true);
   };
@@ -209,7 +214,7 @@ function UserManagement() {
       setSuccessMessage(`Successfully updated user ${editUserData.email}`);
       setShowEditModal(false);
       setEditingUserId(null);
-      setEditUserData({ email: '', name: '', password: '', role: 'staff' });
+      setEditUserData({ email: '', name: '', password: '', role: 'staff', specialization: [] });
       fetchUsers();
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err) {
@@ -695,6 +700,34 @@ function UserManagement() {
                 </select>
               </div>
 
+              {(newUserData.role === 'support_l1' || newUserData.role === 'support_l2' || newUserData.role === 'support_l3') && (
+                <div className="form-group">
+                  <label>🎯 Specializations (for smart ticket assignment)</label>
+                  <p className="form-hint">Select areas of expertise for this support agent</p>
+                  <div className="specialization-checkboxes">
+                    {AGENT_SPECIALIZATIONS.map(spec => (
+                      <label key={spec.value} className="checkbox-label">
+                        <input
+                          type="checkbox"
+                          checked={newUserData.specialization?.includes(spec.value) || false}
+                          onChange={(e) => {
+                            const current = newUserData.specialization || [];
+                            const updated = e.target.checked
+                              ? [...current, spec.value]
+                              : current.filter(s => s !== spec.value);
+                            setNewUserData({ ...newUserData, specialization: updated });
+                          }}
+                        />
+                        <span className="checkbox-text">
+                          <strong>{spec.label}</strong>
+                          <small>{spec.description}</small>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="modal-actions">
                 <button
                   type="button"
@@ -767,6 +800,34 @@ function UserManagement() {
                   ))}
                 </select>
               </div>
+
+              {(editUserData.role === 'support_l1' || editUserData.role === 'support_l2' || editUserData.role === 'support_l3') && (
+                <div className="form-group">
+                  <label>🎯 Specializations (for smart ticket assignment)</label>
+                  <p className="form-hint">Select areas of expertise for this support agent</p>
+                  <div className="specialization-checkboxes">
+                    {AGENT_SPECIALIZATIONS.map(spec => (
+                      <label key={spec.value} className="checkbox-label">
+                        <input
+                          type="checkbox"
+                          checked={editUserData.specialization?.includes(spec.value) || false}
+                          onChange={(e) => {
+                            const current = editUserData.specialization || [];
+                            const updated = e.target.checked
+                              ? [...current, spec.value]
+                              : current.filter(s => s !== spec.value);
+                            setEditUserData({ ...editUserData, specialization: updated });
+                          }}
+                        />
+                        <span className="checkbox-text">
+                          <strong>{spec.label}</strong>
+                          <small>{spec.description}</small>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="modal-actions">
                 <button

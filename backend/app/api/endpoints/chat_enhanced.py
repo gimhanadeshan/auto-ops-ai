@@ -631,20 +631,36 @@ async def _handle_ticket_creation(
         }
         priority = priority_map.get(intent.urgency, TicketPriority.MEDIUM)
         
+        # Map LLM category to TicketCategory enum
+        from app.models.ticket import TicketCategory
+        category_map = {
+            'hardware': TicketCategory.HARDWARE,
+            'software': TicketCategory.SOFTWARE,
+            'network': TicketCategory.NETWORK,
+            'account': TicketCategory.ACCOUNT,
+            'other': TicketCategory.OTHER
+        }
+        category = category_map.get(intent.category.lower(), TicketCategory.OTHER)
+        
         # Create ticket
         ticket_data = TicketCreate(
             title=metadata['title'],
             description=metadata['description'],
             user_email=user_email,
-            priority=priority
+            priority=priority,
+            category=category  # 🆕 Pass category for smart assignment
         )
         
-        db_ticket = TicketService.create_ticket(db=db, ticket_data=ticket_data)
+        result = TicketService.create_ticket(db=db, ticket_data=ticket_data)
+        db_ticket = result.get("ticket")
+        assignment = result.get("assignment")
         
         chat_logger.info(f"TICKET CREATED: #{db_ticket.id}")
         chat_logger.info(f"  Title: {metadata['title']}")
-        chat_logger.info(f"  Category: {intent.category}")
+        chat_logger.info(f"  Category: {category.value}")
         chat_logger.info(f"  Priority: {priority.value}")
+        if assignment and assignment.get('assigned_to'):
+            chat_logger.info(f"  Assigned to: {assignment['assigned_to']} ({assignment.get('reason', 'N/A')})")
         
         return db_ticket.id
         
@@ -699,22 +715,66 @@ async def _handle_priority_update(
 
 
 async def _handle_escalation(db, ticket_id, chat_logger):
-    """Handle escalation to human support."""
+    """Handle escalation to human support - assigns ticket to available agent."""
     try:
         from app.services.ticket_service import TicketService
+        from app.services.assignment_service import get_assignment_service
         from app.models.ticket import TicketUpdate, TicketStatus, TicketPriority
         
-        ticket_update = TicketUpdate(
-            status=TicketStatus.IN_PROGRESS,
-            priority=TicketPriority.HIGH,
-            ai_analysis="Escalated to human support - bot unable to resolve"
-        )
-        TicketService.update_ticket(db, ticket_id, ticket_update)
+        # Get current ticket
+        current_ticket = TicketService.get_ticket(db, ticket_id)
         
-        chat_logger.info(f"ESCALATED TO HUMAN: #{ticket_id}")
+        if not current_ticket:
+            logger.warning(f"[ESCALATION] Ticket #{ticket_id} not found")
+            return
+        
+        # Check if already assigned
+        if current_ticket.assigned_to:
+            logger.info(f"[ESCALATION] Ticket #{ticket_id} already assigned to {current_ticket.assigned_to}")
+            chat_logger.info(f"ESCALATION: Ticket already assigned to {current_ticket.assigned_to}")
+            return
+        
+        # NOW assign to human since AI couldn't resolve
+        logger.info(f"[ESCALATION] Assigning ticket #{ticket_id} to human support...")
+        chat_logger.info(f"ESCALATION: Assigning ticket #{ticket_id} to human support")
+        
+        try:
+            assignment_service = get_assignment_service()
+            assignment_result = assignment_service.assign_ticket(current_ticket, db)
+            logger.info(f"[ESCALATION] Assignment result: {assignment_result}")
+        except Exception as assign_err:
+            logger.error(f"[ESCALATION] Assignment service error: {assign_err}")
+            assignment_result = None
+        
+        if assignment_result and assignment_result.get('assigned_to'):
+            # Update ticket with assignment
+            ticket_update = TicketUpdate(
+                status=TicketStatus.ASSIGNED_TO_HUMAN,
+                priority=TicketPriority.HIGH,
+                ai_analysis=f"AI escalated to human support - Assigned to {assignment_result['assigned_to']} ({assignment_result.get('reason', 'N/A')})"
+            )
+            TicketService.update_ticket(db, ticket_id, ticket_update)
+            
+            logger.info(f"[ESCALATION] Ticket #{ticket_id} assigned to {assignment_result['assigned_to']}")
+            chat_logger.info(f"ESCALATED TO HUMAN: #{ticket_id}")
+            chat_logger.info(f"  Assigned to: {assignment_result['assigned_to']}")
+            chat_logger.info(f"  Reason: {assignment_result.get('reason', 'N/A')}")
+            chat_logger.info(f"  Confidence: {assignment_result.get('confidence', 0)}")
+        else:
+            # No agent available - update status but log warning
+            ticket_update = TicketUpdate(
+                status=TicketStatus.IN_PROGRESS,
+                priority=TicketPriority.HIGH,
+                ai_analysis="Escalated to human support - awaiting agent assignment (no agents currently available)"
+            )
+            TicketService.update_ticket(db, ticket_id, ticket_update)
+            
+            logger.warning(f"[ESCALATION] No agent available for ticket #{ticket_id}")
+            chat_logger.info(f"ESCALATED TO HUMAN: #{ticket_id}")
+            chat_logger.info(f"  WARNING: No support agents available - ticket queued for manual assignment")
         
     except Exception as e:
-        logger.error(f"[TICKET] Escalation error: {e}", exc_info=True)
+        logger.error(f"[ESCALATION] Error: {e}", exc_info=True)
 
 
 async def _handle_status_management(
@@ -1235,21 +1295,37 @@ async def _handle_image_ticket_creation(
         
         priority = priority_map.get(intent.urgency, TicketPriority.MEDIUM)
         
+        # Map LLM category to TicketCategory enum
+        from app.models.ticket import TicketCategory
+        category_map = {
+            'hardware': TicketCategory.HARDWARE,
+            'software': TicketCategory.SOFTWARE,
+            'network': TicketCategory.NETWORK,
+            'account': TicketCategory.ACCOUNT,
+            'other': TicketCategory.OTHER
+        }
+        category = category_map.get(intent.category.lower(), TicketCategory.OTHER)
+        
         # Create ticket
         ticket_data = TicketCreate(
             title=metadata['title'][:100],
             description=enhanced_description,
             user_email=user_email,
-            priority=priority
+            priority=priority,
+            category=category  # 🆕 Pass category for smart assignment
         )
         
-        db_ticket = TicketService.create_ticket(db=db, ticket_data=ticket_data)
+        result = TicketService.create_ticket(db=db, ticket_data=ticket_data)
+        db_ticket = result.get("ticket")
+        assignment = result.get("assignment")
         
         chat_logger.info(f"TICKET CREATED: #{db_ticket.id}")
         chat_logger.info(f"  Title: {metadata['title']}")
-        chat_logger.info(f"  Category: {intent.category}")
+        chat_logger.info(f"  Category: {category.value}")
         chat_logger.info(f"  Priority: {priority.value}")
         chat_logger.info(f"  Image: {image_filename}")
+        if assignment and assignment.get('assigned_to'):
+            chat_logger.info(f"  Assigned to: {assignment['assigned_to']} ({assignment.get('reason', 'N/A')})")
         
         return db_ticket.id
         

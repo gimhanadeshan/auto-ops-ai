@@ -28,10 +28,14 @@ class TicketPriority(str, Enum):
 
 class TicketCategory(str, Enum):
     """Ticket category enumeration."""
-    USER_ERROR = "user_error"
-    SYSTEM_ISSUE = "system_issue"
-    FEATURE_REQUEST = "feature_request"
-    OTHER = "other"
+    HARDWARE = "hardware"  # Physical devices, peripherals, BSOD
+    SOFTWARE = "software"  # Applications, OS issues, performance
+    NETWORK = "network"  # VPN, connectivity, firewall
+    ACCOUNT = "account"  # Login, permissions, password
+    USER_ERROR = "user_error"  # User mistakes, training needed
+    SYSTEM_ISSUE = "system_issue"  # System-wide problems
+    FEATURE_REQUEST = "feature_request"  # Enhancement requests
+    OTHER = "other"  # Uncategorized
 
 
 # SQLAlchemy Model

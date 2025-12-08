@@ -231,19 +231,37 @@ export const TICKET_PRIORITY_LABELS = {
 
 // Ticket Category
 export const TICKET_CATEGORY = {
-  USER_ERROR: 'user_error',
-  SYSTEM_ISSUE: 'system_issue',
-  FEATURE_REQUEST: 'feature_request',
+  HARDWARE: 'hardware',
+  SOFTWARE: 'software',
+  NETWORK: 'network',
+  ACCOUNT: 'account',
+  PERFORMANCE: 'performance',
+  SECURITY: 'security',
   OTHER: 'other'
 }
 
 // Ticket Category Labels
 export const TICKET_CATEGORY_LABELS = {
-  user_error: 'User Error',
-  system_issue: 'System Issue',
-  feature_request: 'Feature Request',
+  hardware: 'Hardware',
+  software: 'Software',
+  network: 'Network',
+  account: 'Account',
+  performance: 'Performance',
+  security: 'Security',
   other: 'Other'
 }
+
+// Specialization options for support agents
+export const AGENT_SPECIALIZATIONS = [
+  { value: 'hardware', label: 'Hardware', description: 'Physical devices, BSOD, repairs' },
+  { value: 'software', label: 'Software', description: 'Applications, performance, crashes' },
+  { value: 'network', label: 'Network', description: 'VPN, connectivity, routing' },
+  { value: 'account', label: 'Account', description: 'Login, permissions, access' },
+  { value: 'security', label: 'Security', description: 'Authentication, malware, policies' },
+  { value: 'critical', label: 'Critical Issues', description: 'High-priority escalations' },
+  { value: 'vpn', label: 'VPN', description: 'VPN-specific issues' },
+  { value: 'performance', label: 'Performance', description: 'Optimization, speed issues' }
+]
 
 // User Roles
 export const USER_ROLES = {
