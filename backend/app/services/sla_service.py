@@ -61,11 +61,4 @@ class SLAService:
         return round(max(0.5, predicted_hours), 1)
 
 # Lazy initialization function
-def get_sla_service():
-    try:
-        return SLAService()
-    except Exception as e:
-        print(f"Error initializing SLA service: {e}")
-        return None
-
 sla_service = None
