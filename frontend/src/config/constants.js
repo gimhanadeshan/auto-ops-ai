@@ -48,13 +48,13 @@ export const API_ENDPOINTS = {
   
   // Monitoring endpoints
   MONITORING: {
-    CHECK_HEALTH: '/check-systems',
-    SYSTEM_METRICS: '/metrics',
-    STATS: '/stats',
-    SERVICES: '/system-status',
-    LOGS: '/sample-logs',
-    METRICS: '/metrics',
-    SIMULATE_CRASH: '/simulate-crash'
+    CHECK_HEALTH: '/monitoring/check-systems',
+    SYSTEM_METRICS: '/monitoring/metrics',
+    STATS: '/monitoring/stats',
+    SERVICES: '/monitoring/system-status',
+    LOGS: '/monitoring/sample-logs',
+    METRICS: '/monitoring/metrics',
+    SIMULATE_CRASH: '/monitoring/simulate-crash'
   },
   
   // Reports endpoints (not yet implemented in backend)
