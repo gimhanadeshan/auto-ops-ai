@@ -89,40 +89,6 @@ def init_database():
         # Initialize migrations table (safe even if exists)
         init_migrations_table(db_path)
     
-    # Apply pending migrations automatically
-    print("\n[*] Checking for pending migrations...")
-    from sqlalchemy import text
-    
-    if migration_applied("add_agent_assignment_fields"):
-        print("[OK] Migration 'add_agent_assignment_fields' already applied")
-    else:
-        print("[*] Applying migration: add_agent_assignment_fields...")
-        try:
-            with engine.connect() as conn:
-                result = conn.execute(text("PRAGMA table_info(users);"))
-                existing_columns = [row[1] for row in result]
-                
-                if 'specialization' not in existing_columns:
-                    conn.execute(text("""
-                        ALTER TABLE users 
-                        ADD COLUMN specialization TEXT NULL;
-                    """))
-                    print("   ✓ Added 'specialization' column")
-                
-                if 'current_workload' not in existing_columns:
-                    conn.execute(text("""
-                        ALTER TABLE users 
-                        ADD COLUMN current_workload INTEGER DEFAULT 0;
-                    """))
-                    print("   ✓ Added 'current_workload' column")
-                
-                conn.commit()
-            
-            record_migration("add_agent_assignment_fields")
-            print("[OK] Migration applied successfully")
-        except Exception as e:
-            print(f"[!] Migration failed: {e}")
-    
     return SessionLocal, UserDB, Role, get_password_hash
 
 
