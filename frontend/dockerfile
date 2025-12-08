@@ -6,10 +6,10 @@ WORKDIR /app
 # Copy package files
 COPY package.json package-lock.json* ./
 
-# Install dependencies
-RUN npm install
+# Install dependencies inside container for Alpine Linux
+RUN npm ci || npm install
 
-# Copy source code
+# Copy source code (exclude node_modules)
 COPY . .
 
 # Expose port 3000

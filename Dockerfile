@@ -35,6 +35,9 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 # Copy application code
 COPY --chown=appuser:appuser backend/app /app/app
 
+# Copy ML models
+COPY --chown=appuser:appuser app/models/ml/*.joblib /app/app/models/ml/
+
 # Switch to non-root user
 USER appuser
 

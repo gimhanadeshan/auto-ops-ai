@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { BarChart3, TrendingUp, Calendar, Download, AlertTriangle } from 'lucide-react'
 import { reportsService } from '../services/reportsService'
 import { pdfService } from '../services/pdfService'
+import SLARiskReport from './SLARiskReport'
 import '../styles/components/Reports.css'
 
 function Reports() {
@@ -176,16 +177,18 @@ function Reports() {
         // Process tickets for category data
         const categoryMap = {}
         tickets.forEach(ticket => {
-          const category = ticket.category || 'Other'
-          categoryMap[category] = (categoryMap[category] || 0) + 1
+          const category = ticket.category
+          if (category && category.toLowerCase() !== 'other') {
+            categoryMap[category] = (categoryMap[category] || 0) + 1
+          }
         })
         
-        const total = tickets.length || 1
+        const validTickets = Object.values(categoryMap).reduce((sum, count) => sum + count, 0) || 1
         const categories = Object.entries(categoryMap)
           .map(([category, count]) => ({
             category,
             count,
-            percentage: Math.round((count / total) * 100)
+            percentage: Math.round((count / validTickets) * 100)
           }))
           .sort((a, b) => b.count - a.count)
         
@@ -247,13 +250,19 @@ function Reports() {
 
     const now = new Date()
     tickets.forEach(ticket => {
-      const ticketDate = new Date(ticket.created_at || ticket.created_date || now)
-      const daysDiff = Math.floor((now - ticketDate) / (1000 * 60 * 60 * 24))
+      if (!ticket.created_at) return
       
-      if (daysDiff < 7) weeklyCount['Week 1']++
-      else if (daysDiff < 14) weeklyCount['Week 2']++
-      else if (daysDiff < 21) weeklyCount['Week 3']++
-      else if (daysDiff < 28) weeklyCount['Week 4']++
+      try {
+        const ticketDate = new Date(ticket.created_at)
+        const daysDiff = Math.floor((now - ticketDate) / (1000 * 60 * 60 * 24))
+        
+        if (daysDiff >= 0 && daysDiff < 7) weeklyCount['Week 4']++
+        else if (daysDiff >= 7 && daysDiff < 14) weeklyCount['Week 3']++
+        else if (daysDiff >= 14 && daysDiff < 21) weeklyCount['Week 2']++
+        else if (daysDiff >= 21 && daysDiff < 28) weeklyCount['Week 1']++
+      } catch (err) {
+        console.error('Error parsing ticket date:', err)
+      }
     })
 
     return Object.entries(weeklyCount).map(([week, tickets]) => ({ week, tickets }))
@@ -412,6 +421,7 @@ function Reports() {
         return (
           <>
             {baseStats}
+            
             <div className="reports-grid">
               <div className="report-card">
                 <div className="card-header">
@@ -440,6 +450,11 @@ function Reports() {
                   ) : (
                     <div className="no-data">No category data available</div>
                   )}
+                </div>
+                
+                {/* SLA Risk Prediction Section within Category Card */}
+                <div className="mt-6 pt-6 border-t border-slate-700">
+                  <SLARiskReport />
                 </div>
               </div>
 
