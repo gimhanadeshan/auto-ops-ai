@@ -363,7 +363,7 @@ if [ "$USERS_COUNT" -gt 1 ]; then
     echo "✅ Seed data already loaded"
 else
     echo "🔄 Loading seed data and creating vector database..."
-    if docker-compose -f docker-compose.deploy.yml exec -T backend python ingestion_script.py; then
+    if docker-compose -f docker-compose.deploy.yml exec -T backend python /app/ingestion_script.py; then
         echo "✅ Seed data and vector database created successfully"
     else
         echo "⚠️  Ingestion script had issues (this is often expected for Windows paths)"
@@ -803,7 +803,7 @@ if [ "$USERS_COUNT" -gt 1 ]; then
     echo "✅ Seed data already loaded"
 else
     echo "🔄 Loading seed data and creating vector database..."
-    if docker-compose -f docker-compose.deploy.yml exec -T backend python ingestion_script.py; then
+    if docker-compose -f docker-compose.deploy.yml exec -T backend python /app/ingestion_script.py; then
         echo "✅ Seed data and vector database created successfully"
     else
         echo "⚠️  Ingestion script had issues (this is often expected for Windows paths)"
@@ -1243,7 +1243,7 @@ if [ "$USERS_COUNT" -gt 1 ]; then
     echo "✅ Seed data already loaded"
 else
     echo "🔄 Loading seed data and creating vector database..."
-    if docker-compose -f docker-compose.deploy.yml exec -T backend python ingestion_script.py; then
+    if docker-compose -f docker-compose.deploy.yml exec -T backend python /app/ingestion_script.py; then
         echo "✅ Seed data and vector database created successfully"
     else
         echo "⚠️  Ingestion script had issues (this is often expected for Windows paths)"
