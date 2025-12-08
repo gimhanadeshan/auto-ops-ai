@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from typing import List
 import logging
+from datetime import datetime, timedelta
 
 from app.core.database import get_db
 from app.models.ticket import TicketDB
@@ -85,9 +86,9 @@ async def get_weekly_trends(db: Session = Depends(get_db)):
         end_of_week = today - timedelta(weeks=i)
         
         # Count tickets created in this range
-        count = db.query(Ticket).filter(
-            Ticket.created_at >= start_of_week,
-            Ticket.created_at < end_of_week
+        count = db.query(TicketDB).filter(
+            TicketDB.created_at >= start_of_week,
+            TicketDB.created_at < end_of_week
         ).count()
         
         trends.append({
