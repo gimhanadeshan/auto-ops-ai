@@ -1,75 +1,4 @@
-import os
-import json
-import sys
-from pathlib import Path
-
-# Suppress onnxruntime warnings if not installed (not required for basic operation)
-import warnings
-warnings.filterwarnings("ignore", message=".*onnxruntime.*")
-
-from dotenv import load_dotenv
-from langchain_chroma import Chroma
-from langchain_core.documents import Document
-import chromadb
-
-# Load environment variables
-load_dotenv()
-
-# Configuration
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "models/text-embedding-004")
-# Set USE_LOCAL_EMBEDDINGS=true to use free HuggingFace model instead of Google (avoids quota limits)
-USE_LOCAL_EMBEDDINGS = os.getenv("USE_LOCAL_EMBEDDINGS", "true").lower() == "true"
-CHROMA_DB_DIR = "./data/processed/chroma_db"
-DATA_FILE = "/app/data/raw/ticketing_system_data_new.json"
-
-def get_embeddings():
-    """Get embeddings model - uses local HuggingFace model by default to avoid API quota issues"""
-    if USE_LOCAL_EMBEDDINGS:
-        print("🔧 Using local HuggingFace embeddings (free, no quota limits)...")
-        try:
-            from langchain_huggingface import HuggingFaceEmbeddings
-            return HuggingFaceEmbeddings(
-                model_name="all-MiniLM-L6-v2",
-                model_kwargs={'device': 'cpu'},
-                encode_kwargs={'normalize_embeddings': True}
-            )
-        except ImportError:
-            print("❌ langchain-huggingface not installed. Installing...")
-            import subprocess
-            subprocess.check_call([sys.executable, "-m", "pip", "install", "langchain-huggingface", "sentence-transformers", "-q"])
-            from langchain_huggingface import HuggingFaceEmbeddings
-            return HuggingFaceEmbeddings(
-                model_name="all-MiniLM-L6-v2",
-                model_kwargs={'device': 'cpu'},
-                encode_kwargs={'normalize_embeddings': True}
-            )
-    else:
-        print("🔧 Using Google Generative AI embeddings...")
-        from langchain_google_genai import GoogleGenerativeAIEmbeddings
-        return GoogleGenerativeAIEmbeddings(
-            model=EMBEDDING_MODEL,
-            google_api_key=GOOGLE_API_KEY
-        )
-
-def load_data_from_file():
-    """Load data from JSON file"""
-    data_path = Path(__file__).parent / DATA_FILE
-    print(f"📂 Loading data from {data_path}...")
-    
-    if not data_path.exists():
-        print(f"❌ Error: Data file not found at {data_path}")
-        return None
-    
-    with open(data_path, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-    
-    print(f"✅ Data loaded successfully!")
-    return data
-
-# Sample Knowledge Base (Converted to valid Python syntax) - Fallback if JSON not available
-KNOWLEDGE_BASE = [
-    {
+{
    "users":[
       {
          "id":"user_0001",
@@ -131,12 +60,12 @@ KNOWLEDGE_BASE = [
             {
                "ticket_id":"TKT-1159",
                "issue":"Laptop fails to join corporate Wi-Fi after password change.",
-               "resolved": True
+               "resolved":true
             },
             {
                "ticket_id":"TKT-1442",
                "issue":"Visual Studio Code extensions not loading due to corrupt profile.",
-               "resolved": True
+               "resolved":true
             }
          ]
       },
@@ -163,12 +92,12 @@ KNOWLEDGE_BASE = [
             {
                "ticket_id":"TKT-1588",
                "issue":"Outlook not syncing emails after mailbox migration.",
-               "resolved": True
+               "resolved":true
             },
             {
                "ticket_id":"TKT-1612",
                "issue":"Unable to access internal Jira over VPN.",
-               "resolved": True
+               "resolved":true
             }
          ]
       },
@@ -195,7 +124,7 @@ KNOWLEDGE_BASE = [
             {
                "ticket_id":"TKT-1720",
                "issue":"Zoom audio device not detected on Windows laptop.",
-               "resolved": True
+               "resolved":true
             }
          ]
       },
@@ -222,7 +151,7 @@ KNOWLEDGE_BASE = [
             {
                "ticket_id":"TKT-1164",
                "issue":"Company VPN disconnects every 5 minutes while using remote desktop.",
-               "resolved": False
+               "resolved":false
             }
          ]
       },
@@ -250,12 +179,12 @@ KNOWLEDGE_BASE = [
             {
                "ticket_id":"TKT-1374",
                "issue":"Mechanical keyboard randomly stops responding on USB-C dock.",
-               "resolved": True
+               "resolved":true
             },
             {
                "ticket_id":"TKT-1751",
                "issue":"Unable to push code to Git due to SSH key mismatch.",
-               "resolved": True
+               "resolved":true
             }
          ]
       }
@@ -274,8 +203,8 @@ KNOWLEDGE_BASE = [
          "knowledge_base_id":"KB-006",
          "assigned_to":"it_support_l1_03",
          "created_at":"2025-11-25T09:30:07Z",
-         "resolved_at": None,
-         "is_resolved": False
+         "resolved_at":null,
+         "is_resolved":false
       },
       {
          "id":"TKT-1764158260799",
@@ -291,7 +220,7 @@ KNOWLEDGE_BASE = [
          "assigned_to":"agent_ai_01",
          "created_at":"2025-11-26T11:57:40.799Z",
          "resolved_at":"2025-11-26T11:57:51.620Z",
-         "is_resolved": True
+         "is_resolved":true
       },
       {
          "id":"TKT-1764158427172",
@@ -307,7 +236,7 @@ KNOWLEDGE_BASE = [
          "assigned_to":"agent_ai_01",
          "created_at":"2025-11-26T12:00:27.172Z",
          "resolved_at":"2025-11-26T12:00:35.478Z",
-         "is_resolved": True
+         "is_resolved":true
       },
       {
          "id":"TKT-1764161161702",
@@ -322,8 +251,8 @@ KNOWLEDGE_BASE = [
          "knowledge_base_id":"KB-004",
          "assigned_to":"it_support_l2_01",
          "created_at":"2025-11-26T12:46:01.702Z",
-         "resolved_at": None,
-         "is_resolved": False
+         "resolved_at":null,
+         "is_resolved":false
       },
       {
          "id":"TKT-1764162205120",
@@ -336,10 +265,10 @@ KNOWLEDGE_BASE = [
          "urgency":"low",
          "category":"hardware",
          "knowledge_base_id":"KB-005",
-         "assigned_to": None,
+         "assigned_to":null,
          "created_at":"2025-11-27T06:23:25.120Z",
-         "resolved_at": None,
-         "is_resolved" : False
+         "resolved_at":null,
+         "is_resolved":false
       }
    ],
    "ticket_conversations":[
@@ -728,148 +657,3 @@ KNOWLEDGE_BASE = [
       }
    ]
 }
-]
-
-def ingest_data():
-    print("🚀 Starting ingestion process...")
-    
-    if not GOOGLE_API_KEY:
-        print("❌ Error: GOOGLE_API_KEY not found in .env")
-        return False
-
-    # 1. Load data from JSON file
-    data = load_data_from_file()
-    if not data:
-        print("⚠️  Using fallback knowledge base...")
-        data = KNOWLEDGE_BASE[0]
-    
-    # 2. Prepare Documents from Knowledge Base
-    documents = []
-    kb_items = data.get("knowledge_base", [])
-    
-    print(f"📚 Processing {len(kb_items)} knowledge base articles...")
-    for item in kb_items:
-        # Create a rich content string for better retrieval
-        content_str = f"""
-Title: {item['title']}
-Category: {item['category']}
-Issue Pattern: {item['issue_pattern']}
-Summary: {item['summary']}
-Resolution Steps:
-{chr(10).join(f"  {i+1}. {step}" for i, step in enumerate(item['resolution_steps']))}
-"""
-        
-        doc = Document(
-            page_content=content_str.strip(),
-            metadata={
-                "source": "knowledge_base",
-                "kb_id": item["id"],
-                "title": item["title"],
-                "category": item["category"],
-                "type": "knowledge_base"
-            }
-        )
-        documents.append(doc)
-    
-    # 3. Add ticket conversations for context
-    conversations = data.get("ticket_conversations", [])
-    print(f"💬 Processing {len(conversations)} ticket conversations...")
-    
-    for conv in conversations:
-        ticket_id = conv.get("ticket_id")
-        messages = conv.get("conversation", [])
-        
-        # Build conversation text
-        conv_text = f"Ticket ID: {ticket_id}\n\n"
-        for msg in messages:
-            sender = msg.get("sender_name", "Unknown")
-            message = msg.get("message", "")
-            conv_text += f"{sender}: {message}\n"
-        
-        # Add events if available
-        events = conv.get("events", [])
-        if events:
-            conv_text += "\nEvents:\n"
-            for event in events:
-                event_type = event.get("event_type", "")
-                event_msg = event.get("message", "")
-                conv_text += f"  - {event_type}: {event_msg}\n"
-        
-        doc = Document(
-            page_content=conv_text.strip(),
-            metadata={
-                "source": "ticket_conversation",
-                "ticket_id": ticket_id,
-                "type": "conversation"
-            }
-        )
-        documents.append(doc)
-    
-    # 4. Add tickets for retrieval
-    tickets = data.get("tickets", [])
-    print(f"🎫 Processing {len(tickets)} tickets...")
-    
-    for ticket in tickets:
-        ticket_text = f"""
-Ticket ID: {ticket.get('id')}
-Title: {ticket.get('title')}
-User: {ticket.get('user_name')}
-Description: {ticket.get('description')}
-Priority: {ticket.get('priority')}
-Status: {ticket.get('status')}
-Category: {ticket.get('category')}
-Urgency: {ticket.get('urgency')}
-Knowledge Base: {ticket.get('knowledge_base_id', 'N/A')}
-"""
-        
-        doc = Document(
-            page_content=ticket_text.strip(),
-            metadata={
-                "source": "ticket",
-                "ticket_id": ticket.get("id"),
-                "user_id": ticket.get("user_id"),
-                "category": ticket.get("category"),
-                "status": ticket.get("status"),
-                "priority": ticket.get("priority"),
-                "type": "ticket"
-            }
-        )
-        documents.append(doc)
-    
-    print(f"📄 Prepared {len(documents)} total documents for ingestion.")
-    
-    # 5. Initialize Embeddings
-    embeddings = get_embeddings()
-
-    # 6. Create/Update Vector Store
-    db_path = Path(__file__).parent / CHROMA_DB_DIR
-    print(f"💾 Creating vector database at {db_path}...")
-    
-    # Remove old database if exists
-    if db_path.exists():
-        import shutil
-        shutil.rmtree(db_path)
-        print("🗑️  Removed old database")
-    
-    # Create ChromaDB client with settings to avoid ONNX runtime
-    chroma_client = chromadb.PersistentClient(
-        path=str(db_path)
-    )
-    
-    vector_store = Chroma.from_documents(
-        documents=documents,
-        embedding=embeddings,
-        client=chroma_client,
-        persist_directory=str(db_path)
-    )
-    
-    print(f"✅ Ingestion complete! Created vector database with {len(documents)} documents.")
-    print(f"   - Knowledge Base Articles: {len(kb_items)}")
-    print(f"   - Ticket Conversations: {len(conversations)}")
-    print(f"   - Tickets: {len(tickets)}")
-    return True
-
-if __name__ == "__main__":
-    success = ingest_data()
-    if not success:
-        exit(1)

@@ -35,6 +35,9 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 # Copy application code (includes ML models in backend/app/models/ml/)
 COPY --chown=appuser:appuser backend/app /app/app
 
+# Copy data directory for ingestion
+COPY --chown=appuser:appuser data /app/data
+
 # Copy initialization and ingestion scripts
 COPY --chown=appuser:appuser backend/init_db.py /app/init_db.py
 COPY --chown=appuser:appuser backend/check_config.py /app/check_config.py
