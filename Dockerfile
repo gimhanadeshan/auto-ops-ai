@@ -32,7 +32,7 @@ RUN useradd -m -u 1000 appuser && \
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
-# Copy application code
+# Copy application code (includes ML models in backend/app/models/ml/)
 COPY --chown=appuser:appuser backend/app /app/app
 
 # Copy initialization and ingestion scripts
@@ -40,8 +40,6 @@ COPY --chown=appuser:appuser backend/init_db.py /app/init_db.py
 COPY --chown=appuser:appuser backend/check_config.py /app/check_config.py
 COPY --chown=appuser:appuser backend/ingestion_script.py /app/ingestion_script.py
 COPY --chown=appuser:appuser backend/migrations.py /app/migrations.py
-# Copy ML models
-COPY --chown=appuser:appuser app/models/ml/*.joblib /app/app/models/ml/
 
 # Switch to non-root user
 USER appuser
