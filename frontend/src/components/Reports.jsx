@@ -6,7 +6,7 @@ import SLARiskReport from './SLARiskReport'
 import '../styles/components/Reports.css'
 
 function Reports() {
-  const [reportType, setReportType] = useState('tickets')
+  const [reportType, setReportType] = useState('sla')
   const [dateRange, setDateRange] = useState('7days')
   const [customStartDate, setCustomStartDate] = useState('')
   const [customEndDate, setCustomEndDate] = useState('')
@@ -417,11 +417,21 @@ function Reports() {
     )
 
     switch (reportType) {
+      case 'sla':
+        return (
+          <>
+            {/* SLA Risk Analysis - Full Width */}
+            <div className="report-card report-card-full-width">
+              <SLARiskReport />
+            </div>
+          </>
+        )
+
       case 'tickets':
         return (
           <>
             {baseStats}
-            
+
             <div className="reports-grid">
               <div className="report-card">
                 <div className="card-header">
@@ -451,11 +461,6 @@ function Reports() {
                     <div className="no-data">No category data available</div>
                   )}
                 </div>
-                
-                {/* SLA Risk Prediction Section within Category Card */}
-                <div className="mt-6 pt-6 border-t border-slate-700">
-                  <SLARiskReport />
-                </div>
               </div>
 
               <div className="report-card">
@@ -482,7 +487,9 @@ function Reports() {
                   )}
                 </div>
               </div>
+            </div>
 
+            <div className="reports-grid">
               <div className="report-card">
                 <div className="card-header">
                   <h3>
@@ -715,6 +722,7 @@ function Reports() {
         <div className="control-group">
           <label>Report Type:</label>
           <select value={reportType} onChange={(e) => setReportType(e.target.value)}>
+            <option value="sla">SLA Risk Analysis</option>
             <option value="tickets">Ticket Summary</option>
             <option value="performance">Performance</option>
             <option value="system">System Health</option>
@@ -723,6 +731,13 @@ function Reports() {
         <div className="control-group">
           <label>Date Range:</label>
           <select value={dateRange} onChange={(e) => setDateRange(e.target.value)}>
+            {reportType === 'sla' && (
+              <>
+                <option value="7days">Last 7 Days</option>
+                <option value="30days">Last 30 Days</option>
+                <option value="90days">Last 90 Days</option>
+              </>
+            )}
             {reportType === 'tickets' && (
               <>
                 <option value="today">Today</option>
