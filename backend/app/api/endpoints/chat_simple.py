@@ -291,26 +291,78 @@ async def chat(
             except Exception as e:
                 logger.error(f"[TICKET] Error updating priority: {e}", exc_info=True)
         
-        # Update ticket status if manually escalated
+        # 🆕 SMART ESCALATION: Assign human ONLY when AI cannot resolve
+        # This happens when:
+        # 1. LLM explicitly says it needs to escalate
+        # 2. OR ticket_intelligence_agent detects frustration/repeated issues
+        escalation_happened = False  # Track if we escalated to prevent status override
+        
         if ticket_id and response['should_escalate']:
             try:
                 from app.services.ticket_service import TicketService
+                from app.services.assignment_service import get_assignment_service
                 from app.models.ticket import TicketUpdate, TicketStatus, TicketPriority
                 
-                ticket_update = TicketUpdate(
-                    status=TicketStatus.IN_PROGRESS,
-                    priority=TicketPriority.HIGH,
-                    ai_analysis="Escalated to human support team - bot unable to resolve"
-                )
-                TicketService.update_ticket(db, ticket_id, ticket_update)
-                logger.info(f"[TICKET] Escalated ticket #{ticket_id}")
-                chat_logger.info(f"TICKET: Escalated to human support #{ticket_id}")
+                # Get current ticket
+                current_ticket = TicketService.get_ticket(db, ticket_id)
+                
+                if current_ticket and not current_ticket.assigned_to:
+                    # NOW assign to human since AI couldn't resolve
+                    logger.info(f"[ESCALATION] AI could not resolve ticket #{ticket_id}, assigning to human...")
+                    chat_logger.info(f"ESCALATION: AI escalating ticket #{ticket_id} to human support")
+                    
+                    try:
+                        assignment_service = get_assignment_service()
+                        assignment_result = assignment_service.assign_ticket(current_ticket, db)
+                        logger.info(f"[ESCALATION] Assignment result: {assignment_result}")
+                    except Exception as assign_init_err:
+                        logger.error(f"[ESCALATION] Assignment service error: {assign_init_err}")
+                        assignment_result = None
+                    
+                    if assignment_result and assignment_result.get('assigned_to'):
+                        # Update ticket with assignment and escalation info
+                        ticket_update = TicketUpdate(
+                            status=TicketStatus.ASSIGNED_TO_HUMAN,
+                            priority=TicketPriority.HIGH,
+                            ai_analysis=f"AI escalated to human support - {assignment_result.get('reason', 'Could not resolve automatically')}"
+                        )
+                        TicketService.update_ticket(db, ticket_id, ticket_update)
+                        escalation_happened = True  # Mark that we escalated
+                        
+                        logger.info(f"[ESCALATION] Ticket #{ticket_id} assigned to {assignment_result['assigned_to']}")
+                        chat_logger.info(f"  Assigned to: {assignment_result['assigned_to']}")
+                        chat_logger.info(f"  Reason: {assignment_result.get('reason', 'N/A')}")
+                        chat_logger.info(f"  Confidence: {assignment_result.get('confidence', 0)}")
+                        
+                        # Add assignment info to response metadata
+                        response['metadata']['escalated_to'] = assignment_result['assigned_to']
+                        response['metadata']['escalation_reason'] = assignment_result.get('reason', 'AI could not resolve')
+                    else:
+                        # No agent available - still update status to show escalation pending
+                        ticket_update = TicketUpdate(
+                            status=TicketStatus.IN_PROGRESS,
+                            priority=TicketPriority.HIGH,
+                            ai_analysis="Escalated to human support - awaiting agent assignment (no agents currently available)"
+                        )
+                        TicketService.update_ticket(db, ticket_id, ticket_update)
+                        escalation_happened = True  # Still counts as escalation attempt
+                        logger.warning(f"[ESCALATION] No agent available for ticket #{ticket_id}")
+                        chat_logger.info(f"  WARNING: No agent available for assignment")
+                        response['metadata']['escalation_pending'] = True
+                        response['metadata']['escalation_reason'] = 'No agents available - ticket queued for assignment'
+                else:
+                    # Already assigned or no ticket
+                    if current_ticket and current_ticket.assigned_to:
+                        logger.info(f"[ESCALATION] Ticket #{ticket_id} already assigned to {current_ticket.assigned_to}")
+                        escalation_happened = True  # Already escalated
+                    
             except Exception as e:
-                logger.error(f"[TICKET] Error escalating: {e}", exc_info=True)
+                logger.error(f"[ESCALATION] Error during escalation: {e}", exc_info=True)
         
         # Intelligent status management with TicketStatusAgent
         # Handles: OPEN → IN_PROGRESS → RESOLVED, plus re-open detection
-        if ticket_id:
+        # IMPORTANT: Skip if escalation already happened to prevent override!
+        if ticket_id and not escalation_happened:
             try:
                 from app.services.agents.ticket_status_agent import get_ticket_status_agent
                 from app.services.ticket_service import TicketService
@@ -323,53 +375,79 @@ async def chat(
                 if current_ticket:
                     current_status = current_ticket.status.value
                     
-                    # Analyze conversation to determine appropriate status
-                    status_decision = status_agent.analyze_conversation_status(
-                        conversation_history=conversation_history,
-                        current_status=current_status,
-                        ticket_created_at=current_ticket.created_at,
-                        llm_resolved_flag=response['is_resolved']
-                    )
-                    
-                    chat_logger.info(f"STATUS-AGENT: Current={current_status}, Recommended={status_decision['recommended_status']}")
-                    chat_logger.info(f"  Should Update: {status_decision['should_update']}")
-                    chat_logger.info(f"  Confidence: {status_decision['confidence']}/10")
-                    chat_logger.info(f"  Reason: {status_decision['reason']}")
-                    
-                    # Update status if needed
-                    if status_decision['should_update']:
-                        # Map status string to enum
-                        status_map = {
-                            'open': TicketStatus.OPEN,
-                            'in_progress': TicketStatus.IN_PROGRESS,
-                            'resolved': TicketStatus.RESOLVED,
-                            'closed': TicketStatus.CLOSED
-                        }
-                        new_status = status_map.get(status_decision['recommended_status'])
+                    # Skip status analysis if ticket is already assigned to human
+                    if current_status == 'assigned_to_human':
+                        logger.info(f"[STATUS] Skipping status analysis - ticket #{ticket_id} already assigned to human")
+                        chat_logger.info(f"STATUS-AGENT: Skipped - ticket already escalated to human")
+                    else:
+                        # Analyze conversation to determine appropriate status
+                        # Pass should_escalate flag to prevent false resolution detection
+                        status_decision = status_agent.analyze_conversation_status(
+                            conversation_history=conversation_history,
+                            current_status=current_status,
+                            ticket_created_at=current_ticket.created_at,
+                            llm_resolved_flag=response['is_resolved'] and not response['should_escalate']  # Don't mark resolved if escalating
+                        )
                         
-                        if new_status and new_status != current_ticket.status:
-                            ticket_update = TicketUpdate(
-                                status=new_status,
-                                resolution_notes=status_decision['resolution_summary'] if status_decision['resolution_summary'] else None
-                            )
-                            TicketService.update_ticket(db, ticket_id, ticket_update)
+                        chat_logger.info(f"STATUS-AGENT: Current={current_status}, Recommended={status_decision['recommended_status']}")
+                        chat_logger.info(f"  Should Update: {status_decision['should_update']}")
+                        chat_logger.info(f"  Confidence: {status_decision['confidence']}/10")
+                        chat_logger.info(f"  Reason: {status_decision['reason']}")
+                        
+                        # DON'T update to resolved if escalation is needed!
+                        if status_decision['should_update'] and not (status_decision['recommended_status'] == 'resolved' and response['should_escalate']):
+                            # Map status string to enum
+                            status_map = {
+                                'open': TicketStatus.OPEN,
+                                'in_progress': TicketStatus.IN_PROGRESS,
+                                'resolved': TicketStatus.RESOLVED,
+                                'closed': TicketStatus.CLOSED
+                            }
+                            new_status = status_map.get(status_decision['recommended_status'])
                             
-                            logger.info(f"[STATUS] Ticket #{ticket_id}: {current_status} -> {new_status.value} ({status_decision['reason']})")
-                            chat_logger.info(f"TICKET STATUS CHANGED: #{ticket_id}")
-                            chat_logger.info(f"  From: {current_status}")
-                            chat_logger.info(f"  To: {new_status.value}")
-                            chat_logger.info(f"  Transition: {status_decision['transition']}")
-                            chat_logger.info(f"  Reason: {status_decision['reason']}")
-                    
-                    # Check for SLA warning
-                    if status_decision['sla_warning']:
-                        logger.warning(f"[SLA] Ticket #{ticket_id} approaching SLA breach!")
-                        chat_logger.info(f"SLA WARNING: Ticket #{ticket_id} may breach SLA")
-                    
-                    # Check for escalation needs
-                    if status_decision['needs_escalation']:
-                        logger.warning(f"[ESCALATION] Ticket #{ticket_id} user showing frustration signals")
-                        chat_logger.info(f"ESCALATION NEEDED: Ticket #{ticket_id} - user frustrated")
+                            if new_status and new_status != current_ticket.status:
+                                ticket_update = TicketUpdate(
+                                    status=new_status,
+                                    resolution_notes=status_decision['resolution_summary'] if status_decision['resolution_summary'] else None
+                                )
+                                TicketService.update_ticket(db, ticket_id, ticket_update)
+                                
+                                logger.info(f"[STATUS] Ticket #{ticket_id}: {current_status} -> {new_status.value} ({status_decision['reason']})")
+                                chat_logger.info(f"TICKET STATUS CHANGED: #{ticket_id}")
+                                chat_logger.info(f"  From: {current_status}")
+                                chat_logger.info(f"  To: {new_status.value}")
+                                chat_logger.info(f"  Transition: {status_decision['transition']}")
+                                chat_logger.info(f"  Reason: {status_decision['reason']}")
+                        
+                        # Check for SLA warning
+                        if status_decision['sla_warning']:
+                            logger.warning(f"[SLA] Ticket #{ticket_id} approaching SLA breach!")
+                            chat_logger.info(f"SLA WARNING: Ticket #{ticket_id} may breach SLA")
+                        
+                        # Check for escalation needs (user frustration, repeated issues, etc.)
+                        # This is ANOTHER trigger for human assignment
+                        if status_decision['needs_escalation'] and not current_ticket.assigned_to:
+                            logger.warning(f"[ESCALATION] Ticket #{ticket_id} user showing frustration signals - assigning human")
+                            chat_logger.info(f"ESCALATION NEEDED: Ticket #{ticket_id} - user frustrated, assigning human")
+                            
+                            try:
+                                from app.services.assignment_service import get_assignment_service
+                                
+                                assignment_service = get_assignment_service()
+                                assignment_result = assignment_service.assign_ticket(current_ticket, db)
+                                
+                                if assignment_result and assignment_result.get('assigned_to'):
+                                    ticket_update = TicketUpdate(
+                                        status=TicketStatus.ASSIGNED_TO_HUMAN,
+                                        ai_analysis=f"User frustration detected - escalated to {assignment_result['assigned_to']}"
+                                    )
+                                    TicketService.update_ticket(db, ticket_id, ticket_update)
+                                    
+                                    chat_logger.info(f"  Assigned to: {assignment_result['assigned_to']}")
+                                    response['metadata']['escalated_to'] = assignment_result['assigned_to']
+                                    response['metadata']['escalation_reason'] = 'User frustration detected'
+                            except Exception as assign_err:
+                                logger.error(f"[ESCALATION] Assignment error: {assign_err}")
                         
             except Exception as e:
                 logger.error(f"[STATUS] Error in status management: {e}", exc_info=True)

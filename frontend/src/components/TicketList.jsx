@@ -918,10 +918,9 @@ function TicketList() {
                     value={formData.category}
                     onChange={(e) => setFormData({...formData, category: e.target.value})}
                   >
-                    <option value={TICKET_CATEGORY.USER_ERROR}>User Error</option>
-                    <option value={TICKET_CATEGORY.SYSTEM_ISSUE}>System Issue</option>
-                    <option value={TICKET_CATEGORY.FEATURE_REQUEST}>Feature Request</option>
-                    <option value={TICKET_CATEGORY.OTHER}>Other</option>
+                    {Object.entries(TICKET_CATEGORY_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -1046,10 +1045,9 @@ function TicketList() {
                     value={formData.category}
                     onChange={(e) => setFormData({...formData, category: e.target.value})}
                   >
-                    <option value={TICKET_CATEGORY.USER_ERROR}>User Error</option>
-                    <option value={TICKET_CATEGORY.SYSTEM_ISSUE}>System Issue</option>
-                    <option value={TICKET_CATEGORY.FEATURE_REQUEST}>Feature Request</option>
-                    <option value={TICKET_CATEGORY.OTHER}>Other</option>
+                    {Object.entries(TICKET_CATEGORY_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
                   </select>
                 </div>
                 <div className="form-group"></div>

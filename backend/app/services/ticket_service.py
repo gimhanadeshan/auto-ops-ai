@@ -3,7 +3,7 @@ Ticket service - CRUD operations and business logic for tickets.
 """
 import logging
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from app.models.ticket import (
@@ -11,6 +11,7 @@ from app.models.ticket import (
     TicketPriority, TicketCategory
 )
 from app.models.user import UserDB
+
 logger = logging.getLogger(__name__)
 
 
@@ -18,9 +19,19 @@ class TicketService:
     """Service for managing support tickets."""
     
     @staticmethod
-    def create_ticket(db: Session, ticket_data: TicketCreate) -> TicketDB:
+    def create_ticket(db: Session, ticket_data: TicketCreate) -> Dict:
         """
-        Create a new ticket with AI analysis.
+        Create a new ticket with AI analysis and smart assignment.
+        
+        Returns:
+            {
+                "ticket": TicketDB,
+                "assignment": {
+                    "assigned_to": "agent@example.com",
+                    "reason": "Assignment reason",
+                    "confidence": 0.85
+                }
+            }
         """
         # Create ticket in database
         db_ticket = TicketDB(
@@ -29,7 +40,8 @@ class TicketService:
             user_email=ticket_data.user_email,
             status=TicketStatus.OPEN,
             priority=ticket_data.priority or TicketPriority.MEDIUM,
-            category=ticket_data.category or TicketCategory.OTHER
+            category=ticket_data.category or TicketCategory.OTHER,
+            assigned_to=ticket_data.assigned_to  # Manual assignment if provided
         )
         
         # Simple ticket creation - AI analysis happens in chat endpoint
@@ -45,7 +57,16 @@ class TicketService:
         db.commit()
         db.refresh(db_ticket)
         
-        return db_ticket
+        # NOTE: We do NOT auto-assign on creation anymore!
+        # Assignment happens ONLY when AI agent cannot resolve and escalates.
+        # This allows the AI to try solving the issue first.
+        # See chat_simple.py for escalation-based assignment logic.
+        assignment_result = None
+        
+        return {
+            "ticket": db_ticket,
+            "assignment": assignment_result
+        }
     
     @staticmethod
     def get_ticket(db: Session, ticket_id: int) -> Optional[TicketDB]:

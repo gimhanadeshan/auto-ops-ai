@@ -235,9 +235,9 @@ Remember: Be helpful, concise, and human-like. One clear step at a time!
             
             logger.info(f"[LLM] Response generated: {bot_response[:100]}...")
             
-            # Simple analysis of bot's own response to extract metadata
+            # Analyze conversation for escalation and resolution
             is_technical = self._is_technical_conversation(conversation)
-            should_escalate = any(word in bot_response.lower() for word in ["escalat", "specialist team", "human support"])
+            should_escalate = self._should_escalate_to_human(user_message, bot_response, conversation)
             is_resolved = any(word in bot_response.lower() for word in ["solved", "fixed", "resolved", "glad that helped"])
             
             return {
@@ -272,6 +272,92 @@ Remember: Be helpful, concise, and human-like. One clear step at a time!
                 "is_resolved": False,
                 "metadata": {"error": str(e)}
             }
+    
+    def _should_escalate_to_human(
+        self, 
+        user_message: str, 
+        bot_response: str, 
+        conversation: List
+    ) -> bool:
+        """
+        Comprehensive escalation detection.
+        
+        Triggers escalation when:
+        1. User explicitly asks for human help
+        2. User shows urgency/frustration signals
+        3. Bot response indicates escalation
+        4. Multiple failed troubleshooting attempts
+        """
+        user_lower = user_message.lower()
+        bot_lower = bot_response.lower()
+        
+        # 1. USER EXPLICITLY ASKS FOR HUMAN
+        human_request_phrases = [
+            "assign a human", "human agent", "real person", "speak to someone",
+            "talk to human", "talk to a human", "escalate", "escalate this",
+            "need human", "want human", "get human", "human help",
+            "transfer to", "connect me to", "let me talk to",
+            "manager", "supervisor", "technician", "specialist"
+        ]
+        if any(phrase in user_lower for phrase in human_request_phrases):
+            logger.info(f"[ESCALATION] User explicitly requested human help")
+            return True
+        
+        # 2. USER URGENCY/FRUSTRATION SIGNALS
+        urgency_phrases = [
+            "no time", "have no time", "dont have time", "don't have time",
+            "meeting in", "urgent", "emergency", "critical", "asap",
+            "right now", "immediately", "cant wait", "can't wait",
+            "afraid", "worried", "scared", "anxious",
+            "frustrated", "annoyed", "angry", "upset",
+            "not working", "nothing works", "useless", "waste of time",
+            "please help", "please listen", "i need help now",
+            "this is important", "very important", "extremely important"
+        ]
+        urgency_count = sum(1 for phrase in urgency_phrases if phrase in user_lower)
+        if urgency_count >= 1:  # Even 1 urgency signal is enough
+            logger.info(f"[ESCALATION] User urgency detected: {urgency_count} signals")
+            return True
+        
+        # 3. USER REFUSES/CAN'T DO TROUBLESHOOTING STEPS
+        refusal_phrases = [
+            "i cant", "i can't", "cant do", "can't do", "unable to",
+            "not able to", "dont know how", "don't know how",
+            "no i cant", "no i can't", "i refuse", "wont do", "won't do"
+        ]
+        if any(phrase in user_lower for phrase in refusal_phrases):
+            # Check if this is repeated (user said can't multiple times)
+            refusal_count = sum(
+                1 for msg in conversation 
+                if msg.get('role') == 'user' and 
+                any(p in msg.get('parts', [''])[0].lower() for p in refusal_phrases)
+            )
+            if refusal_count >= 2:
+                logger.info(f"[ESCALATION] User repeatedly unable to perform steps")
+                return True
+        
+        # 4. BOT RESPONSE INDICATES ESCALATION
+        bot_escalation_phrases = [
+            "escalat", "specialist team", "human support", "support team",
+            "it team", "technician", "pass this to", "transfer to",
+            "connect you with", "hand this over"
+        ]
+        if any(phrase in bot_lower for phrase in bot_escalation_phrases):
+            logger.info(f"[ESCALATION] Bot indicated escalation in response")
+            return True
+        
+        # 5. TOO MANY TURNS WITHOUT RESOLUTION (user is stuck)
+        turn_count = len([m for m in conversation if m.get('role') == 'user'])
+        if turn_count >= 6:
+            # Check if issue seems unresolved after many turns
+            resolved_keywords = ['fixed', 'working', 'solved', 'thanks', 'thank you', 'great']
+            recent_user_msgs = [m.get('parts', [''])[0].lower() for m in conversation[-4:] if m.get('role') == 'user']
+            recent_text = ' '.join(recent_user_msgs)
+            if not any(kw in recent_text for kw in resolved_keywords):
+                logger.info(f"[ESCALATION] Many turns ({turn_count}) without resolution")
+                return True
+        
+        return False
     
     def _is_technical_conversation(self, conversation: List) -> bool:
         """Simple heuristic to detect if conversation is technical."""

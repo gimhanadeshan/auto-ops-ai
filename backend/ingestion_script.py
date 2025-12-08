@@ -2,13 +2,12 @@ import os
 import json
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock
 
-# Mock onnxruntime BEFORE importing chromadb to avoid Windows DLL issues
-sys.modules['onnxruntime'] = MagicMock()
+# Suppress onnxruntime warnings if not installed (not required for basic operation)
+import warnings
+warnings.filterwarnings("ignore", message=".*onnxruntime.*")
 
 from dotenv import load_dotenv
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 import chromadb
@@ -19,8 +18,39 @@ load_dotenv()
 # Configuration
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "models/text-embedding-004")
+# Set USE_LOCAL_EMBEDDINGS=true to use free HuggingFace model instead of Google (avoids quota limits)
+USE_LOCAL_EMBEDDINGS = os.getenv("USE_LOCAL_EMBEDDINGS", "true").lower() == "true"
 CHROMA_DB_DIR = "./data/processed/chroma_db"
 DATA_FILE = "../data/raw/ticketing_system_data_new.json"
+
+def get_embeddings():
+    """Get embeddings model - uses local HuggingFace model by default to avoid API quota issues"""
+    if USE_LOCAL_EMBEDDINGS:
+        print("🔧 Using local HuggingFace embeddings (free, no quota limits)...")
+        try:
+            from langchain_huggingface import HuggingFaceEmbeddings
+            return HuggingFaceEmbeddings(
+                model_name="all-MiniLM-L6-v2",
+                model_kwargs={'device': 'cpu'},
+                encode_kwargs={'normalize_embeddings': True}
+            )
+        except ImportError:
+            print("❌ langchain-huggingface not installed. Installing...")
+            import subprocess
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "langchain-huggingface", "sentence-transformers", "-q"])
+            from langchain_huggingface import HuggingFaceEmbeddings
+            return HuggingFaceEmbeddings(
+                model_name="all-MiniLM-L6-v2",
+                model_kwargs={'device': 'cpu'},
+                encode_kwargs={'normalize_embeddings': True}
+            )
+    else:
+        print("🔧 Using Google Generative AI embeddings...")
+        from langchain_google_genai import GoogleGenerativeAIEmbeddings
+        return GoogleGenerativeAIEmbeddings(
+            model=EMBEDDING_MODEL,
+            google_api_key=GOOGLE_API_KEY
+        )
 
 def load_data_from_file():
     """Load data from JSON file"""
@@ -809,11 +839,7 @@ Knowledge Base: {ticket.get('knowledge_base_id', 'N/A')}
     print(f"📄 Prepared {len(documents)} total documents for ingestion.")
     
     # 5. Initialize Embeddings
-    print("🔧 Initializing embeddings model...")
-    embeddings = GoogleGenerativeAIEmbeddings(
-        model=EMBEDDING_MODEL,
-        google_api_key=GOOGLE_API_KEY
-    )
+    embeddings = get_embeddings()
 
     # 6. Create/Update Vector Store
     db_path = Path(__file__).parent / CHROMA_DB_DIR
