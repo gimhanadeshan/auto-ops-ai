@@ -1,19 +1,27 @@
 import joblib
 import os
 import pandas as pd
+from pathlib import Path
 
 class SLAService:
     def __init__(self):
-        self.model_path = "app/models/ml/sla_model.joblib"
-        self.encoder_path = "app/models/ml/category_encoder.joblib"
+        # Use Path to get absolute path relative to this file
+        base_dir = Path(__file__).resolve().parent.parent  # backend/app/
+        self.model_path = base_dir / "models" / "ml" / "sla_model.joblib"
+        self.encoder_path = base_dir / "models" / "ml" / "category_encoder.joblib"
         self.model = None
         self.encoder = None
         self._load()
 
     def _load(self):
-        if os.path.exists(self.model_path):
-            self.model = joblib.load(self.model_path)
-            self.encoder = joblib.load(self.encoder_path)
+        if self.model_path.exists() and self.encoder_path.exists():
+            try:
+                self.model = joblib.load(str(self.model_path))
+                self.encoder = joblib.load(str(self.encoder_path))
+            except Exception as e:
+                print(f"Warning: Could not load SLA models: {e}")
+                self.model = None
+                self.encoder = None
 
     def predict_resolution_time(self, category, priority_str, description):
         if not self.model: return 0
