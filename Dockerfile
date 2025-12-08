@@ -40,8 +40,6 @@ COPY --chown=appuser:appuser backend/init_db.py /app/init_db.py
 COPY --chown=appuser:appuser backend/check_config.py /app/check_config.py
 COPY --chown=appuser:appuser backend/ingestion_script.py /app/ingestion_script.py
 COPY --chown=appuser:appuser backend/migrations.py /app/migrations.py
-COPY --chown=appuser:appuser backend/migrate_add_assignment.py /app/migrate_add_assignment.py
-COPY --chown=appuser:appuser backend/update_categories.py /app/update_categories.py
 
 # Switch to non-root user
 USER appuser
