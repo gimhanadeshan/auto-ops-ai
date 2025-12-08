@@ -311,7 +311,7 @@ fi
 echo ""
 echo "1️⃣1️⃣ Applying database migrations..."
 echo "🔄 Running migration: Add assignment fields..."
-if docker-compose -f docker-compose.deploy.yml exec -T backend python backend/migrate_add_assignment.py; then
+if docker-compose -f docker-compose.deploy.yml exec -T backend python /app/migrate_add_assignment.py; then
     echo "✅ Migration completed successfully"
 else
     echo "⚠️  Migration script had issues (may already be applied)"
@@ -319,7 +319,7 @@ fi
 
 echo ""
 echo "🔄 Running category update..."
-if docker-compose -f docker-compose.deploy.yml exec -T backend python backend/update_categories.py; then
+if docker-compose -f docker-compose.deploy.yml exec -T backend python /app/update_categories.py; then
     echo "✅ Categories updated"
 else
     echo "⚠️  Category update had issues (no tickets to update)"
