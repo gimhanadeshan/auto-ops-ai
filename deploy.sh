@@ -47,11 +47,32 @@ echo "   • Logs are stored in 'logs' volume (persists across deployments)"
 echo "   • Your data will NOT be reset during redeployment"
 echo ""
 
-# Step 1: Clean up Docker to free space
+# Step 1: Aggressive cleanup to free space
 echo ""
-echo "1️⃣  Cleaning up Docker resources..."
+echo "1️⃣  Aggressive cleanup to free disk space..."
+
+# Remove old deployments
+rm -rf /app 2>/dev/null || true
+
+# Clean Docker aggressively
 docker system prune -af --volumes 2>/dev/null || true
-echo "✅ Docker cleanup complete"
+docker container prune -af 2>/dev/null || true
+docker image prune -af 2>/dev/null || true
+docker volume prune -af 2>/dev/null || true
+
+# Clean apt cache
+apt-get clean 2>/dev/null || true
+apt-get autoclean 2>/dev/null || true
+apt-get autoremove -y 2>/dev/null || true
+
+# Clean temp files
+rm -rf /tmp/* /var/tmp/* 2>/dev/null || true
+
+# Show disk space
+echo "📊 Disk space after cleanup:"
+df -h / | tail -1
+
+echo "✅ Cleanup complete"
 
 # Step 2: Ensure tools are installed
 echo ""
@@ -77,9 +98,18 @@ echo "3️⃣  Preparing /app directory..."
 mkdir -p /app
 cd /app
 
-# Step 4: Clone/update repository (with retry)
+# Step 4: Clone/update repository (with retry and space check)
 echo ""
 echo "4️⃣  Cloning repository..."
+
+# Check available space
+AVAILABLE_SPACE=$(df /app | tail -1 | awk '{print $4}')
+if [ "$AVAILABLE_SPACE" -lt 2000000 ]; then
+    echo "❌ ERROR: Not enough disk space (need 2GB, have $(($AVAILABLE_SPACE/1024/1024))GB)"
+    echo "   Please free up disk space and try again"
+    exit 1
+fi
+
 REBUILD_NEEDED=false
 DOCKERFILE_CHANGED=false
 GIT_RETRY=0
@@ -87,7 +117,7 @@ GIT_MAX_RETRIES=2
 
 while [ $GIT_RETRY -lt $GIT_MAX_RETRIES ]; do
     if [ ! -d .git ]; then
-        if git clone https://github.com/gimhanadeshan/auto-ops-ai.git . 2>/dev/null; then
+        if git clone --depth 1 https://github.com/gimhanadeshan/auto-ops-ai.git . 2>/dev/null; then
             REBUILD_NEEDED=true
             break
         fi
