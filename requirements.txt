@@ -26,7 +26,7 @@ tiktoken==0.7.0
 # --- Vector Database ---
 # Chromadb is notoriously sensitive to Python versions. 
 # Works perfectly on Python 3.11.
-chromadb==0.5.11
+chromadb==0.5.13
 langchain-chroma==0.1.4
 
 # --- Embeddings ---

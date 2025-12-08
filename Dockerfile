@@ -27,7 +27,7 @@ RUN if [ "$CI_BUILD" = "true" ]; then \
         REQ_FILE="requirements.txt"; \
     fi && \
     pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir --prefer-binary -r $REQ_FILE
+    pip install --no-cache-dir --prefer-binary --use-deprecated=legacy-resolver -r $REQ_FILE
 
 # Final stage
 FROM python:3.11-slim
