@@ -7,14 +7,7 @@ from datetime import datetime, timedelta
 from app.core.database import get_db
 from app.models.ticket import TicketDB
 
-# Try to import SLA service with fallback
-try:
-    from app.services.sla_service import sla_service
-    SLA_AVAILABLE = True
-except Exception as e:
-    logging.warning(f"SLA service unavailable (ML models missing?): {e}")
-    SLA_AVAILABLE = False
-
+from app.services.sla_service import get_or_initialize_sla_service
 # Define the router
 router = APIRouter(tags=["Analytics"])
 
@@ -30,6 +23,9 @@ async def get_sla_risk_report(db: Session = Depends(get_db)):
     Works with or without ML models (uses fallback rules).
     """
     try:
+        # Get the SLA service (lazy loaded)
+        service = get_or_initialize_sla_service()
+        
         # Get active tickets
         open_tickets = db.query(TicketDB).filter(
             TicketDB.status.in_(['open', 'in_progress'])
@@ -39,9 +35,9 @@ async def get_sla_risk_report(db: Session = Depends(get_db)):
         
         for t in open_tickets:
             # Predict using ML or fallback
-            if SLA_AVAILABLE:
+            if service:
                 try:
-                    predicted_hours = sla_service.predict_resolution_time(
+                    predicted_hours = service.predict_resolution_time(
                         category=t.title, 
                         priority_str=t.priority, 
                         description=t.description or ""
