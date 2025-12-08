@@ -47,9 +47,15 @@ echo "   • Logs are stored in 'logs' volume (persists across deployments)"
 echo "   • Your data will NOT be reset during redeployment"
 echo ""
 
-# Step 1: Ensure tools are installed
+# Step 1: Clean up Docker to free space
 echo ""
-echo "1️⃣  Checking Docker installation..."
+echo "1️⃣  Cleaning up Docker resources..."
+docker system prune -af --volumes 2>/dev/null || true
+echo "✅ Docker cleanup complete"
+
+# Step 2: Ensure tools are installed
+echo ""
+echo "2️⃣  Checking Docker installation..."
 if ! command -v docker &> /dev/null; then
     echo "❌ Docker not found. Installing..."
     curl -fsSL https://get.docker.com -o get-docker.sh
@@ -65,15 +71,15 @@ fi
 
 echo "✅ Docker tools ready"
 
-# Step 2: Prepare application directory
+# Step 3: Prepare application directory
 echo ""
-echo "2️⃣  Preparing /app directory..."
+echo "3️⃣  Preparing /app directory..."
 mkdir -p /app
 cd /app
 
-# Step 3: Clone/update repository (with retry)
+# Step 4: Clone/update repository (with retry)
 echo ""
-echo "3️⃣  Cloning repository..."
+echo "4️⃣  Cloning repository..."
 REBUILD_NEEDED=false
 DOCKERFILE_CHANGED=false
 GIT_RETRY=0
@@ -124,9 +130,9 @@ done
 
 echo "✅ Repository updated"
 
-# Step 4: Create environment files
+# Step 5: Create environment files
 echo ""
-echo "4️⃣  Creating environment configuration files..."
+echo "5️⃣  Creating environment configuration files..."
 
 # Create backend .env
 mkdir -p backend
@@ -165,9 +171,9 @@ VITE_API_BASE_URL=http://${DROPLET_IP}:8000/api/v1
 EOF
 echo "✅ Frontend .env created"
 
-# Step 5: Login to Docker Hub (with retry)
+# Step 6: Login to Docker Hub (with retry)
 echo ""
-echo "5️⃣  Logging in to Docker Hub..."
+echo "6️⃣  Logging in to Docker Hub..."
 MAX_RETRIES=2
 RETRY_COUNT=0
 
@@ -187,9 +193,9 @@ while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
     fi
 done
 
-# Step 6: Pull latest images or build if changes detected
+# Step 7: Pull latest images or build if changes detected
 echo ""
-echo "6️⃣  Processing Docker images..."
+echo "7️⃣  Processing Docker images..."
 
 if [ "$REBUILD_NEEDED" = true ]; then
     echo "🔨 Building new images from source..."
@@ -239,30 +245,30 @@ else
     fi
 fi
 
-# Step 7: Stop old containers
+# Step 8: Stop old containers
 echo ""
-echo "7️⃣  Stopping old containers..."
+echo "8️⃣  Stopping old containers..."
 docker-compose -f docker-compose.deploy.yml down || true
 echo "✅ Old containers stopped"
 
-# Step 8: Start new containers
+# Step 9: Start new containers
 echo ""
-echo "8️⃣  Starting new containers..."
+echo "9️⃣  Starting new containers..."
 echo "📍 API URL: http://${DROPLET_IP}:8000/api/v1"
 VITE_API_BASE_URL="http://${DROPLET_IP}:8000/api/v1" docker-compose -f docker-compose.deploy.yml up -d --build
 echo "✅ Containers started"
 
-# Step 9: Open firewall ports
+# Step 10: Open firewall ports
 echo ""
-echo "9️⃣  Configuring firewall..."
+echo "🔟 Configuring firewall..."
 ufw allow 8000/tcp || true
 ufw allow 80/tcp || true
 ufw allow 443/tcp || true
 echo "✅ Firewall configured"
 
-# Step 10: Wait for services with health check
+# Step 11: Wait for services with health check
 echo ""
-echo "🔟 Waiting for backend to be ready..."
+echo "1️⃣1️⃣ Waiting for backend to be ready..."
 HEALTH_WAIT=0
 MAX_WAIT=30
 while [ $HEALTH_WAIT -lt $MAX_WAIT ]; do
@@ -281,9 +287,9 @@ if [ $HEALTH_WAIT -ge $MAX_WAIT ]; then
     echo "⚠️  Backend didn't respond to health check (normal for first deployment)"
 fi
 
-# Step 10: Delete existing database and recreate fresh
+# Step 12: Delete existing database and recreate fresh
 echo ""
-echo "1️⃣0️⃣ Resetting database..."
+echo "1️⃣2️⃣ Resetting database..."
 
 DB_PATH="/app/data/processed/auto_ops.db"
 
@@ -306,9 +312,9 @@ else
     exit 1
 fi
 
-# Step 11: Check admin user (should exist from init_db.py)
+# Step 13: Check admin user (should exist from init_db.py)
 echo ""
-echo "1️⃣1️⃣ Verifying admin user..."
+echo "1️⃣3️⃣ Verifying admin user..."
 ADMIN_EXISTS=$(docker-compose -f docker-compose.deploy.yml exec -T backend python -c "
 from app.core.database import SessionLocal
 from app.models.user import UserDB
@@ -326,9 +332,9 @@ else
     echo "❌ Admin user not created - check init_db.py"
 fi
 
-# Step 12: Load ingestion data
+# Step 14: Load ingestion data
 echo ""
-echo "1️⃣2️⃣ Loading ingestion data and creating vector database..."
+echo "1️⃣4️⃣ Loading ingestion data and creating vector database..."
 if docker-compose -f docker-compose.deploy.yml exec -T backend python ingestion_script.py; then
     echo "✅ Seed data and vector database created successfully"
 else
@@ -337,12 +343,12 @@ fi
 
 # NOW check vector database after ingestion
 echo ""
-echo "1️⃣3️⃣b Checking vector database after ingestion..."
+echo "1️⃣5️⃣ Checking vector database after ingestion..."
 VECTOR_EXISTS=$(docker-compose -f docker-compose.deploy.yml exec -T backend sh -c "[ -d $VECTOR_DB_PATH ] && echo '1' || echo '0'" 2>/dev/null || echo "0")
 
-# Step 13: Final verification
+# Step 16: Final verification
 echo ""
-echo "1️⃣3️⃣ Final verification..."
+echo "1️⃣6️⃣ Final verification..."
 
 # Check if backend is healthy
 HEALTH_STATUS=$(curl -s http://localhost:8000/health 2>/dev/null | grep -o "healthy" || echo "error")
@@ -354,12 +360,12 @@ fi
 
 # Check container status
 echo ""
-echo "1️⃣4️⃣ Container status:"
+echo "1️⃣7️⃣ Container status:"
 docker-compose -f docker-compose.deploy.yml ps
 
-# Step 15: Verify bot is online by checking status endpoint
+# Step 18: Verify bot is online by checking status endpoint
 echo ""
-echo "1️⃣5️⃣ Verifying bot status..."
+echo "1️⃣8️⃣ Verifying bot status..."
 BOT_STATUS=$(curl -s http://localhost:8000/api/v1/status 2>/dev/null | grep -o '"status":"[^"]*"' | cut -d'"' -f4)
 BOT_BOT_STATUS=$(curl -s http://localhost:8000/api/v1/status 2>/dev/null | grep -o '"status":"[^"]*"' | tail -1 | cut -d'"' -f4)
 
