@@ -103,13 +103,12 @@ try:
     )
     app.include_router(prediction_monitoring.router, 
                        prefix=f"{settings.api_prefix}/prediction_monitoring")
-    app.include_router(analytics.router, prefix=f"{settings.api_prefix}/analytics")
 except Exception as e:
     logger.warning(f"Could not include status endpoint at startup: {e}")
 
 # Import other endpoints individually so optional heavy dependencies don't break startup
 # Use chat_enhanced (LLM-First with intelligent RAG) for the main chat
-for _name, _tag in (("auth", "Authentication"), ("chat_enhanced", "Chat"), ("tickets", "Tickets"), ("dashboard", "Dashboard"), ("monitoring", "Monitoring"),("admin", "Admin"), ("prediction_monitoring", "Predictions"), ("actions", "Actions")):
+for _name, _tag in (("auth", "Authentication"), ("chat_enhanced", "Chat"), ("tickets", "Tickets"), ("dashboard", "Dashboard"), ("monitoring", "Monitoring"),("admin", "Admin"), ("prediction_monitoring", "Predictions"), ("actions", "Actions"), ("analytics", "Analytics")):
     try:
         mod = importlib.import_module(f"app.api.endpoints.{_name}")
         # Monitoring endpoint gets its own prefix path
@@ -123,6 +122,12 @@ for _name, _tag in (("auth", "Authentication"), ("chat_enhanced", "Chat"), ("tic
             app.include_router(
                 mod.router,
                 prefix=f"{settings.api_prefix}/admin",
+                tags=[_tag]
+            )
+        elif _name == "analytics":
+            app.include_router(
+                mod.router,
+                prefix=f"{settings.api_prefix}/analytics",
                 tags=[_tag]
             )
         else:
