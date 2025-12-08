@@ -281,9 +281,6 @@ if [ $HEALTH_WAIT -ge $MAX_WAIT ]; then
     echo "⚠️  Backend didn't respond to health check (normal for first deployment)"
 fi
 
-# Step 11: Initialize database (skip if already exists)
-echo ""
-echo "1️⃣1️⃣ Checking database status..."
 # Step 10: Check database and initialize if needed
 echo ""
 echo "1️⃣0️⃣ Checking database persistence..."
@@ -310,11 +307,23 @@ else
     fi
 fi
 
-# Step 11b: Check vector database (MOVED AFTER INGESTION)
+# Step 11: Apply migrations
 echo ""
-echo "1️⃣1️⃣b Checking vector database (ChromaDB) status..."
-VECTOR_DB_PATH="/app/data/processed/chroma_db"
-# Will check after ingestion runs
+echo "1️⃣1️⃣ Applying database migrations..."
+echo "🔄 Running migration: Add assignment fields..."
+if docker-compose -f docker-compose.deploy.yml exec -T backend python backend/migrate_add_assignment.py; then
+    echo "✅ Migration completed successfully"
+else
+    echo "⚠️  Migration script had issues (may already be applied)"
+fi
+
+echo ""
+echo "🔄 Running category update..."
+if docker-compose -f docker-compose.deploy.yml exec -T backend python backend/update_categories.py; then
+    echo "✅ Categories updated"
+else
+    echo "⚠️  Category update had issues (no tickets to update)"
+fi
 
 # Step 12: Check admin user and seed data
 echo ""
