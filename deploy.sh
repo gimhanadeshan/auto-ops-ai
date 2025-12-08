@@ -281,35 +281,34 @@ if [ $HEALTH_WAIT -ge $MAX_WAIT ]; then
     echo "⚠️  Backend didn't respond to health check (normal for first deployment)"
 fi
 
-# Step 10: Check database and initialize if needed
+# Step 10: Delete existing database and recreate fresh
 echo ""
-echo "1️⃣0️⃣ Checking database persistence..."
-
-# Show current volume status
-echo "📁 Database volumes in use:"
-docker volume ls | grep backend-data || echo "   No volumes found yet"
+echo "1️⃣0️⃣ Resetting database..."
 
 DB_PATH="/app/data/processed/auto_ops.db"
 
-# Check if database exists inside the container
-DB_EXISTS=$(docker-compose -f docker-compose.deploy.yml exec -T backend sh -c "[ -f $DB_PATH ] && echo '1' || echo '0'" 2>/dev/null || echo "0")
+# Delete database file
+echo "🔄 Removing existing database..."
+docker-compose -f docker-compose.deploy.yml exec -T backend sh -c "rm -f $DB_PATH" 2>/dev/null || true
+echo "   ✓ Database file deleted"
 
-if [ "$DB_EXISTS" = "1" ]; then
-    echo "✅ Database file exists (data preserved)"
+# Delete volumes to ensure clean slate
+echo "🔄 Removing database volumes..."
+docker volume rm app_backend-data 2>/dev/null || true
+echo "   ✓ Volumes cleaned"
+
+# Initialize fresh database
+echo "🔄 Initializing fresh database..."
+if docker-compose -f docker-compose.deploy.yml exec -T backend python init_db.py; then
+    echo "✅ Database initialized successfully"
 else
-    echo "🔄 Database not found - initializing..."
-    echo "   [i] This is expected on first deployment"
-    if docker-compose -f docker-compose.deploy.yml exec -T backend python init_db.py; then
-        echo "✅ Database initialized successfully"
-    else
-        echo "❌ Database initialization failed"
-        exit 1
-    fi
+    echo "❌ Database initialization failed"
+    exit 1
 fi
 
-# Step 11: Check admin user and seed data
+# Step 11: Check admin user (should exist from init_db.py)
 echo ""
-echo "1️⃣2️⃣ Checking admin user..."
+echo "1️⃣1️⃣ Verifying admin user..."
 ADMIN_EXISTS=$(docker-compose -f docker-compose.deploy.yml exec -T backend python -c "
 from app.core.database import SessionLocal
 from app.models.user import UserDB
@@ -324,41 +323,16 @@ except:
 if [ "$ADMIN_EXISTS" = "1" ]; then
     echo "✅ Admin user exists (admin@acme.com)"
 else
-    echo "🔄 Admin user not found - creating via init_db.py..."
-    if docker-compose -f docker-compose.deploy.yml exec -T backend python init_db.py; then
-        echo "✅ Admin user created successfully"
-        echo "   Email: admin@acme.com"
-        echo "   Password: admin123"
-        ADMIN_EXISTS="1"
-    else
-        echo "❌ Failed to create admin user"
-        ADMIN_EXISTS="0"
-    fi
+    echo "❌ Admin user not created - check init_db.py"
 fi
 
-# Step 13: Load ingestion data
+# Step 12: Load ingestion data
 echo ""
-echo "1️⃣3️⃣ Loading ingestion data..."
-USERS_COUNT=$(docker-compose -f docker-compose.deploy.yml exec -T backend python -c "
-from app.core.database import SessionLocal
-from app.models.user import UserDB
-try:
-    session = SessionLocal()
-    count = session.query(UserDB).count()
-    print(count)
-except:
-    print('0')
-" 2>/dev/null || echo "0")
-
-if [ "$USERS_COUNT" -gt 1 ]; then
-    echo "✅ Seed data already loaded"
+echo "1️⃣2️⃣ Loading ingestion data and creating vector database..."
+if docker-compose -f docker-compose.deploy.yml exec -T backend python ingestion_script.py; then
+    echo "✅ Seed data and vector database created successfully"
 else
-    echo "🔄 Loading seed data and creating vector database..."
-    if docker-compose -f docker-compose.deploy.yml exec -T backend python ingestion_script.py; then
-        echo "✅ Seed data and vector database created successfully"
-    else
-        echo "⚠️  Ingestion script had issues (this is often expected for Windows paths)"
-    fi
+    echo "⚠️  Ingestion script had issues (vectors may still be created)"
 fi
 
 # NOW check vector database after ingestion
@@ -366,9 +340,9 @@ echo ""
 echo "1️⃣3️⃣b Checking vector database after ingestion..."
 VECTOR_EXISTS=$(docker-compose -f docker-compose.deploy.yml exec -T backend sh -c "[ -d $VECTOR_DB_PATH ] && echo '1' || echo '0'" 2>/dev/null || echo "0")
 
-# Step 14: Final verification
+# Step 13: Final verification
 echo ""
-echo "1️⃣4️⃣ Final verification..."
+echo "1️⃣3️⃣ Final verification..."
 
 # Check if backend is healthy
 HEALTH_STATUS=$(curl -s http://localhost:8000/health 2>/dev/null | grep -o "healthy" || echo "error")
@@ -380,12 +354,12 @@ fi
 
 # Check container status
 echo ""
-echo "1️⃣5️⃣ Container status:"
+echo "1️⃣4️⃣ Container status:"
 docker-compose -f docker-compose.deploy.yml ps
 
-# Step 16: Verify bot is online by checking status endpoint
+# Step 15: Verify bot is online by checking status endpoint
 echo ""
-echo "1️⃣6️⃣ Verifying bot status..."
+echo "1️⃣5️⃣ Verifying bot status..."
 BOT_STATUS=$(curl -s http://localhost:8000/api/v1/status 2>/dev/null | grep -o '"status":"[^"]*"' | cut -d'"' -f4)
 BOT_BOT_STATUS=$(curl -s http://localhost:8000/api/v1/status 2>/dev/null | grep -o '"status":"[^"]*"' | tail -1 | cut -d'"' -f4)
 
