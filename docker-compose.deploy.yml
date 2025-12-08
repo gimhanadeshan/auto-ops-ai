@@ -32,7 +32,9 @@ services:
       context: ./frontend
       dockerfile: dockerfile
       args:
-        VITE_API_BASE_URL: http://${DROPLET_IP:-localhost}:8000/api/v1
+        - VITE_API_BASE_URL=http://${DROPLET_IP:-138.68.228.105}:8000/api/v1
+    environment:
+      - VITE_API_BASE_URL=http://${DROPLET_IP:-138.68.228.105}:8000/api/v1
     depends_on:
       - backend
     restart: unless-stopped
