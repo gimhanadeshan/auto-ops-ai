@@ -17,23 +17,7 @@ echo "======================================"
 export DOCKER_HUB_USERNAME="${DOCKER_HUB_USERNAME:-}"
 export DOCKER_HUB_PASSWORD="${DOCKER_HUB_PASSWORD:-}"
 export GOOGLE_API_KEY="${GOOGLE_API_KEY:-}"
-
-# Get public IP address (try multiple methods for reliability)
-DROPLET_IP=""
-if [ -z "$DROPLET_IP" ]; then
-    # Try to get public IP from metadata (DigitalOcean)
-    DROPLET_IP=$(curl -s http://169.254.169.254/metadata/v1/public-ipv4 2>/dev/null || true)
-fi
-if [ -z "$DROPLET_IP" ]; then
-    # Fallback: use first non-loopback IP
-    DROPLET_IP=$(hostname -I | awk '{for(i=1;i<=NF;i++) if($i !~ /^127\./) {print $i; break}}')
-fi
-if [ -z "$DROPLET_IP" ]; then
-    # Last resort: use localhost (for local testing)
-    DROPLET_IP="localhost"
-fi
-
-export DROPLET_IP
+export DROPLET_IP=$(hostname -I | awk '{print $1}')
 
 if [ -z "$DOCKER_HUB_USERNAME" ]; then
     echo "❌ Error: DOCKER_HUB_USERNAME not set"
