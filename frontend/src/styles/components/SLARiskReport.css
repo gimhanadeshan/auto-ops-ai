@@ -1,8 +1,4 @@
 /* SLA Risk Report Styles */
-.sla-report-container {
-  /* No extra margin/padding/border needed when in full-width card */
-}
-
 .sla-loading,
 .sla-error {
   display: flex;
