@@ -82,7 +82,7 @@ if (-not (Test-Path "backend\.env")) {
 }
 
 # Check if required data file exists
-$dataFile = "data\raw\ticketing_system_data_new.json"
+$dataFile = "backend\data\raw\ticketing_system_data_new.json"
 if (-not (Test-Path $dataFile)) {
     Write-Host ""
     Write-Host "⚠️  WARNING: Required data file not found: $dataFile" -ForegroundColor Yellow
@@ -166,7 +166,7 @@ if (Test-Path "backend\data\processed\chroma_db") {
     Write-Host "  http://localhost:8000/docs (API Documentation)" -ForegroundColor White
 } else {
     Write-Host "To create the vector database:" -ForegroundColor Cyan
-    Write-Host "  1. Ensure data file exists: data\raw\ticketing_system_data_new.json" -ForegroundColor White
+    Write-Host "  1. Ensure data file exists: backend\data\raw\ticketing_system_data_new.json" -ForegroundColor White
     Write-Host "  2. Add your GOOGLE_API_KEY to backend\.env" -ForegroundColor White
     Write-Host "  3. Run: .\venv\Scripts\python.exe backend\ingestion_script.py" -ForegroundColor White
     Write-Host ""
